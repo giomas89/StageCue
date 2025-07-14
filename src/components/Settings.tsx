@@ -19,6 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Info } from 'lucide-react';
 
 interface MidiMessage {
   command: number;
@@ -234,38 +236,14 @@ function MidiSettings() {
 
 function OscSettings() {
     const { settings, setSettings } = useSoundCue();
-    const [oscMessages, setOscMessages] = useState<{timestamp: string, address: string, args: string}[]>([]);
     
-    useEffect(() => {
-        // This is a mock interval for demonstration purposes.
-        const mockInterval = setInterval(() => {
-             const commands = [
-                { address: "/soundcue/play", args: ""},
-                { address: "/soundcue/stop", args: ""},
-                { address: "/soundcue/play", args: "3"},
-                { address: "/soundcue/next", args: ""},
-                { address: "/soundcue/prev", args: ""},
-             ];
-             const randomCommand = commands[Math.floor(Math.random()*commands.length)];
-             const newMessage = {
-                timestamp: new Date().toLocaleTimeString(),
-                address: randomCommand.address,
-                args: randomCommand.args
-             }
-             setOscMessages(prev => [newMessage, ...prev.slice(0, 49)]);
-        }, 5000);
-
-        return () => clearInterval(mockInterval);
-    }, []);
-
-
     const oscCommands = [
         { command: "Play", address: "/soundcue/play" },
         { command: "Pause", address: "/soundcue/pause" },
         { command: "Stop", address: "/soundcue/stop" },
         { command: "Next", address: "/soundcue/next" },
         { command: "Previous", address: "/soundcue/prev" },
-        { command: "Play Track", address: "/soundcue/play {track_index}" },
+        { command: "Play Track", address: "/soundcue/play/{track_index}" },
     ];
 
     return (
@@ -302,7 +280,13 @@ function OscSettings() {
                             />
                         </div>
                         <Button disabled>Connect</Button>
-                        <p className="text-xs text-muted-foreground">Connection functionality requires a separate OSC bridge application and is not implemented in this demo.</p>
+                        <Alert>
+                          <Info className="h-4 w-4" />
+                          <AlertTitle>Info</AlertTitle>
+                          <AlertDescription>
+                            This functionality requires a separate OSC bridge application. Direct OSC listening is not possible in web browsers for security reasons.
+                          </AlertDescription>
+                        </Alert>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -338,21 +322,15 @@ function OscSettings() {
                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
-                        <CardDescription>Displays incoming OSC messages (demonstration only).</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-48 w-full rounded-md border">
-                            <div className="p-4 font-mono text-xs">
-                            {oscMessages.length > 0 ? (
-                                oscMessages.map((msg, index) => (
-                                    <p key={`${msg.timestamp}-${index}`}>
-                                        <span className="text-muted-foreground">[{msg.timestamp}]</span>{' '}
-                                        {msg.address} <span className="text-primary">{msg.args}</span>
-                                    </p>
-                                ))
-                            ) : <p className="text-muted-foreground">Waiting for messages...</p>}
-                            </div>
-                        </ScrollArea>
+                        <Alert>
+                          <Info className="h-4 w-4" />
+                          <AlertTitle>Info</AlertTitle>
+                          <AlertDescription>
+                            This monitor will display messages received from your OSC bridge application once it's connected and sending data.
+                          </AlertDescription>
+                        </Alert>
                     </CardContent>
                 </Card>
             </TabsContent>
