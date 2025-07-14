@@ -145,16 +145,17 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   // Auto-select first track when queue is populated
   useEffect(() => {
     if (queue.length > 0 && currentTrackIndex === null) {
-      setCurrentTrackIndex(0);
+      const newIndex = isShuffled ? currentQueue.findIndex(t => t.id === queue[0].id) : 0;
+      setCurrentTrackIndex(newIndex);
     }
-  }, [queue, currentTrackIndex]);
+  }, [queue, currentTrackIndex, currentQueue, isShuffled]);
 
   useEffect(() => {
-    // When the current track is set (and not playing), load it into the audio element
-    if(currentTrack && !isPlaying) {
-      if(audioRef.current) {
-        audioRef.current.src = currentTrack.url;
-        audioRef.current.load();
+    if (currentTrack && audioRef.current && audioRef.current.src !== currentTrack.url) {
+      audioRef.current.src = currentTrack.url;
+      audioRef.current.load();
+      if (isPlaying) {
+        audioRef.current.play().catch(e => console.error("Playback failed after track change", e));
       }
     }
   }, [currentTrack, isPlaying]);
@@ -162,10 +163,22 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isShuffled) {
+      // Get the current track before shuffling
+      const trackBeforeShuffle = currentTrack;
       const shuffled = [...queue].sort(() => Math.random() - 0.5);
       setShuffledQueue(shuffled);
+      // Find the new index of the current track in the shuffled queue
+      if (trackBeforeShuffle) {
+          const newIndex = shuffled.findIndex(t => t.id === trackBeforeShuffle.id);
+          setCurrentTrackIndex(newIndex);
+      }
     } else {
+      const trackBeforeUnshuffle = currentTrack;
       setShuffledQueue([]);
+      if (trackBeforeUnshuffle) {
+          const newIndex = queue.findIndex(t => t.id === trackBeforeUnshuffle.id);
+          setCurrentTrackIndex(newIndex);
+      }
     }
   }, [isShuffled, queue]);
   
@@ -209,16 +222,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const playTrack = useCallback((index: number) => {
     if (index >= 0 && index < currentQueue.length) {
-      const track = currentQueue[index];
       setCurrentTrackIndex(index);
-      if (audioRef.current) {
-        if(audioRef.current.src !== track.url) {
-            audioRef.current.src = track.url;
-        }
-        audioRef.current.play().then(() => setIsPlaying(true)).catch(e => console.error("Playback failed", e));
-      }
+      setIsPlaying(true); // Set playing to true immediately to trigger useEffect
     }
-  }, [currentQueue]);
+  }, [currentQueue.length]);
 
   const togglePlayPause = useCallback(() => {
     if (!currentTrack) return;
@@ -226,11 +233,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audioRef.current?.pause();
       setIsPlaying(false);
     } else {
-      // If src is not set, it means we are playing for the first time
-      if(audioRef.current && audioRef.current.src !== currentTrack.url) {
-        audioRef.current.src = currentTrack.url;
-      }
-      audioRef.current?.play().then(() => setIsPlaying(true));
+      audioRef.current?.play().then(() => setIsPlaying(true)).catch(e => console.error("Playback failed", e));
     }
   }, [isPlaying, currentTrack]);
 
@@ -259,18 +262,12 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         nextIndex = 0;
       } else {
         setIsPlaying(false);
-        // If not repeating, reset the player to the first track ready state
-        if (currentQueue.length > 0 && audioRef.current) {
-           setCurrentTrackIndex(0);
-           audioRef.current.src = currentQueue[0].url;
-           audioRef.current.load();
-           setProgress(0);
-        }
+        stopPlayback();
         return;
       }
     }
     playTrack(nextIndex);
-  }, [currentTrackIndex, currentQueue, playTrack, repeatMode]);
+  }, [currentTrackIndex, currentQueue.length, playTrack, repeatMode, stopPlayback]);
   
   playNextRef.current = playNext;
 
@@ -282,15 +279,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       const prevIndex = currentTrackIndex - 1;
       if (prevIndex >= 0) {
         playTrack(prevIndex);
+      } else if (repeatMode === 'all') {
+        playTrack(currentQueue.length - 1);
       }
     }
-  }, [currentTrackIndex, playTrack]);
+  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length]);
 
   const clearQueue = () => {
     if (isPlaying) {
         stopPlayback();
     }
     setQueue([]);
+    setShuffledQueue([]);
     setCurrentTrackIndex(null);
     setProgress(0);
     setDuration(0);

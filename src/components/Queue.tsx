@@ -44,29 +44,22 @@ export default function Queue() {
       const newTracks: Track[] = Array.from(files)
         .filter(file => file.type.startsWith('audio/'))
         .map(file => ({
-          id: `${file.name}-${file.size}-${file.lastModified}`,
+          id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
           name: file.name.replace(/\.[^/.]+$/, ""),
           file,
           url: URL.createObjectURL(file),
         }));
-      
-      const existingIds = new Set(queue.map(t => t.id));
-      const uniqueNewTracks = newTracks.filter(t => !existingIds.has(t.id));
 
-      if (uniqueNewTracks.length < newTracks.length) {
-          toast({ variant: "default", title: "Duplicate tracks skipped", description: "Some tracks were already in the queue." });
-      }
-
-      if (uniqueNewTracks.length > 0) {
-           toast({ title: "Tracks added", description: `${uniqueNewTracks.length} tracks added to the queue.` });
+      if (newTracks.length > 0) {
+           toast({ title: "Tracks added", description: `${newTracks.length} tracks added to the queue.` });
       } else {
         return;
       }
       
-      setQueue(prevQueue => [...prevQueue, ...uniqueNewTracks]);
+      setQueue(prevQueue => [...prevQueue, ...newTracks]);
 
       // Get duration for new tracks
-      uniqueNewTracks.forEach(track => {
+      newTracks.forEach(track => {
         const audio = new Audio(track.url);
         audio.onloadedmetadata = () => {
           setQueue(prevQueue => {
