@@ -152,7 +152,7 @@ export default function Player() {
               
               <Button size="lg" className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-2xl font-bold" onClick={togglePlayPause} disabled={!currentTrack || isFading}>
                   {isFading && fadeCountdown !== null ? (
-                    <span>{fadeCountdown.toFixed(1)}</span>
+                    <span>{Math.round(fadeCountdown)}</span>
                   ) : isPlaying ? (
                     <Pause className="w-8 h-8 fill-primary-foreground" />
                   ) : (
