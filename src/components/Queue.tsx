@@ -199,12 +199,12 @@ export default function Queue() {
       </div>
       <ScrollArea className="flex-1">
         <DragDropContext onDragEnd={onDragEnd}>
-            <Droppable droppableId="playlist">
+            <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
                 {(provided) => (
                     <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
                     {queue.length > 0 ? (
                         queue.map((track, index) => (
-                        <Draggable key={track.id} draggableId={track.id} index={index} isDragDisabled={isShuffled}>
+                        <Draggable key={track.id} draggableId={track.id} index={index}>
                             {(provided, snapshot) => (
                             <li
                                 ref={provided.innerRef}
