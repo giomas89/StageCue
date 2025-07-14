@@ -16,13 +16,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Info, Timer } from 'lucide-react';
+import { Info, Timer, Volume2 } from 'lucide-react';
 
 interface MidiMessage {
   command: number;
@@ -470,6 +471,50 @@ function GeneralSettings() {
                 </CardContent>
             </Card>
 
+            <Card>
+                <CardHeader>
+                    <CardTitle>Volume Control</CardTitle>
+                    <CardDescription>Set a maximum volume limit for the player.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-4">
+                        <Switch
+                            id="maxvolume-enabled"
+                            checked={settings.audio.maxVolume.enabled}
+                            onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}))}
+                            aria-label="Toggle Maximum Volume"
+                        />
+                        <Label htmlFor="maxvolume-level" className={cn(!settings.audio.maxVolume.enabled && "text-muted-foreground/50")}>
+                            Maximum Volume
+                        </Label>
+                        <div className={cn("relative w-24", !settings.audio.maxVolume.enabled && "opacity-50")}>
+                            <Volume2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                id="maxvolume-level-input"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={settings.audio.maxVolume.level}
+                                onChange={(e) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: Math.max(0, Math.min(100, Number(e.target.value))) }}}))}
+                                disabled={!settings.audio.maxVolume.enabled}
+                                className="pl-8 text-center"
+                            />
+                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                        </div>
+                        <div className="col-span-3">
+                            <Slider
+                                value={[settings.audio.maxVolume.level]}
+                                onValueChange={(value) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value[0]}}}))}
+                                max={100}
+                                step={1}
+                                disabled={!settings.audio.maxVolume.enabled}
+                            />
+                        </div>
+                     </div>
+                </CardContent>
+            </Card>
+
 
             <Card>
                 <CardHeader>
@@ -512,5 +557,3 @@ export default function SettingsPanel() {
     </Tabs>
   );
 }
-
-    

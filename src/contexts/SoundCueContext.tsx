@@ -68,6 +68,7 @@ const defaultSettings: Settings = {
       outputId: 'default',
       fadeIn: { enabled: false, duration: 2 },
       fadeOut: { enabled: false, duration: 2 },
+      maxVolume: { enabled: false, level: 100 },
     }
 };
 
@@ -85,7 +86,13 @@ const loadSettings = (): Settings => {
                 ...parsed,
                 midi: { ...defaultSettings.midi, ...parsed.midi, mappings: {...defaultSettings.midi.mappings, ...parsed.midi?.mappings} },
                 osc: { ...defaultSettings.osc, ...parsed.osc },
-                audio: { ...defaultSettings.audio, ...parsed.audio, fadeIn: {...defaultSettings.audio.fadeIn, ...parsed.audio?.fadeIn}, fadeOut: {...defaultSettings.audio.fadeOut, ...parsed.audio?.fadeOut} },
+                audio: { 
+                  ...defaultSettings.audio, 
+                  ...parsed.audio, 
+                  fadeIn: {...defaultSettings.audio.fadeIn, ...parsed.audio?.fadeIn}, 
+                  fadeOut: {...defaultSettings.audio.fadeOut, ...parsed.audio?.fadeOut},
+                  maxVolume: {...defaultSettings.audio.maxVolume, ...parsed.audio?.maxVolume}
+                },
             };
             return mergedSettings;
         }
@@ -114,7 +121,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>(settings.audio.outputId);
+  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -135,11 +142,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             const settingsJson = JSON.stringify(settings);
             localStorage.setItem('soundcue-settings', settingsJson);
             setSelectedAudioOutputId(settings.audio.outputId);
+            
+            // Enforce max volume limit
+            if (settings.audio.maxVolume.enabled) {
+              const maxVol = settings.audio.maxVolume.level / 100;
+              if (volume > maxVol) {
+                setVolume(maxVol);
+              }
+            }
         } catch (error) {
             console.error("Failed to save settings to localStorage", error);
         }
     }
-  }, [settings, isHydrated]);
+  }, [settings, isHydrated, volume]);
 
   const getAudioOutputs = useCallback(async () => {
     try {
@@ -319,14 +334,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       if (!audio?.src || !error) return;
     
       let errorMsg = `Could not play audio. Code: ${error.code}, Message: ${error.message}`;
-      if (error.code === MediaError.MEDIA_ERR_DECODE) {
+      if (error.code === MediaError.MEDIA_ERR_DECODE || error.code === MediaError.MEDIA_ERR_ABORTED && error.message.includes("DEMUXER_ERROR_COULD_NOT_OPEN")) {
         errorMsg = `The audio file might be corrupt or in an unsupported format.`;
       } else if (error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
         errorMsg = `The audio format is not supported.`;
       } else if (error.code === MediaError.MEDIA_ERR_NETWORK) {
         errorMsg = `A network error caused the download to fail.`;
       } else if (error.code === MediaError.MEDIA_ERR_ABORTED) {
-        errorMsg = `Playback was aborted.`;
+        // Don't show toast for user-initiated aborts (e.g. changing track)
+        return;
       }
       
       toast({
@@ -391,12 +407,16 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [isShuffled, queue]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const setVolume = (vol: number) => {
-    setInternalVolume(vol);
+    let newVol = vol;
+    if (settings.audio.maxVolume.enabled) {
+      newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
+    }
+    setInternalVolume(newVol);
     if (audioRef.current) {
         stopFade();
-        audioRef.current.volume = vol;
+        audioRef.current.volume = newVol;
     }
-    if(vol > 0 && isMuted) setIsMuted(false);
+    if(newVol > 0 && isMuted) setIsMuted(false);
   }
 
   const setAudioOutput = useCallback(async (deviceId: string) => {

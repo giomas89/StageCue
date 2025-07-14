@@ -60,7 +60,8 @@ export default function Player() {
     isShuffled,
     toggleShuffle,
     skipForward,
-    skipBackward
+    skipBackward,
+    settings,
   } = useSoundCue();
 
   const VolumeIcon = isMuted ? VolumeX : volume > 0.5 ? Volume2 : volume > 0 ? Volume1 : VolumeX;
@@ -74,6 +75,8 @@ export default function Player() {
   };
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
+  
+  const maxVolume = settings.audio.maxVolume.enabled ? settings.audio.maxVolume.level : 100;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -190,9 +193,8 @@ export default function Player() {
               <VolumeIcon className="w-5 h-5" />
             </Button>
             <Slider
-              defaultValue={[100]}
               value={[isMuted ? 0 : volume * 100]}
-              max={100}
+              max={maxVolume}
               step={1}
               onValueChange={handleVolumeChange}
               className="w-full"

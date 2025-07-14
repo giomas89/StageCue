@@ -34,6 +34,10 @@ export interface Settings {
     fadeOut: {
       enabled: boolean;
       duration: number;
+    },
+    maxVolume: {
+      enabled: boolean;
+      level: number;
     }
   }
 }
