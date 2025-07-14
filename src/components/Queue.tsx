@@ -54,6 +54,20 @@ export default function Queue() {
 
       setQueue(prevQueue => {
           const updatedQueue = [...prevQueue, ...newTracks];
+          
+          // Preload durations
+          updatedQueue.forEach(track => {
+              if (!track.duration) {
+                  const audio = new Audio(track.url);
+                  audio.onloadedmetadata = () => {
+                      setQueue(current => current.map(t => 
+                          t.id === track.id ? { ...t, duration: audio.duration } : t
+                      ));
+                      URL.revokeObjectURL(audio.src); // Clean up blob URL after getting metadata
+                  };
+              }
+          });
+
           if(wasEmpty && updatedQueue.length > 0) {
               setTimeout(() => playTrack(0, false), 100);
           }
@@ -61,18 +75,6 @@ export default function Queue() {
       });
 
       toast({ title: "Tracks added", description: `${newTracks.length} tracks added to the queue.` });
-
-      // Get duration for new tracks
-      newTracks.forEach(track => {
-        const audio = new Audio(track.url);
-        audio.onloadedmetadata = () => {
-          setQueue(prevQueue => {
-            return prevQueue.map(t => 
-              t.id === track.id ? { ...t, duration: audio.duration } : t
-            );
-          });
-        };
-      });
     }
   }
 
@@ -119,7 +121,9 @@ export default function Queue() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `${playlistName}.m3u`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast({ title: "Playlist Saved", description: `Playlist "${playlistName}.m3u" has been saved.` });
   };
@@ -199,7 +203,7 @@ export default function Queue() {
                 onClick={() => playTrack(index)}
                 className={cn(
                   'flex items-center justify-between p-3 rounded-md cursor-pointer hover:bg-muted',
-                  index === currentTrackIndex && 'bg-primary/20 text-primary-foreground'
+                  index === currentTrackIndex && 'bg-primary/20'
                 )}
               >
                 <div className="flex items-center gap-3">

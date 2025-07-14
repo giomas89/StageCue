@@ -108,6 +108,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const playNextRef = useRef((_isTrackEnd: boolean) => {});
   const isPlayingRef = useRef(false);
+  const playAfterLoadRef = useRef(false);
 
   // Save settings to localStorage whenever they change
   useEffect(() => {
@@ -155,26 +156,29 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const handleCanPlay = () => {
         if (!audio) return;
         setDuration(audio.duration || 0);
-        if (isPlayingRef.current) {
+        if (playAfterLoadRef.current) {
             audio.play().catch(e => {
                 console.error("Playback failed on canplay", e);
                 setIsPlaying(false);
                 isPlayingRef.current = false;
             });
+            playAfterLoadRef.current = false;
         }
     }
     
     const handleError = (e: any) => {
-        if (audio?.src) {
+        const error = (e.target as HTMLAudioElement).error;
+        if (audio?.src && error) {
              toast({
                 variant: "destructive",
                 title: "Playback Error",
-                description: `Could not play the audio file. Error: ${e.message || 'Unknown error'}`
+                description: `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`
             });
         }
        
         setIsPlaying(false);
         isPlayingRef.current = false;
+        playAfterLoadRef.current = false;
     }
 
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -201,18 +205,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       setCurrentTrackIndex(index);
       setIsPlaying(andPlay);
       isPlayingRef.current = andPlay;
+      playAfterLoadRef.current = andPlay;
       
       if (audioRef.current.src !== trackToPlay.url) {
         audioRef.current.src = trackToPlay.url;
         audioRef.current.load();
-      }
-
-      if (andPlay) {
+      } else if (andPlay) {
          audioRef.current.play().catch(e => {
             console.error("Playback failed on re-play", e);
             setIsPlaying(false);
             isPlayingRef.current = false;
          });
+      } else {
+        audioRef.current.pause();
       }
     }
   }, [currentQueue]);
@@ -230,25 +235,29 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    const trackBeforeShuffle = currentTrack;
+    let newQueue: Track[] = [];
     if (isShuffled) {
-      // Get the current track before shuffling
-      const trackBeforeShuffle = currentTrack;
       const shuffled = [...queue].sort(() => Math.random() - 0.5);
       setShuffledQueue(shuffled);
-      // Find the new index of the current track in the shuffled queue
-      if (trackBeforeShuffle) {
-          const newIndex = shuffled.findIndex(t => t.id === trackBeforeShuffle.id);
-          setCurrentTrackIndex(newIndex);
-      }
+      newQueue = shuffled;
     } else {
-      const trackBeforeUnshuffle = currentTrack;
       setShuffledQueue([]);
-      if (trackBeforeUnshuffle) {
-          const newIndex = queue.findIndex(t => t.id === trackBeforeUnshuffle.id);
-          setCurrentTrackIndex(newIndex);
-      }
+      newQueue = queue;
     }
-  }, [isShuffled, queue, currentTrack]);
+    
+    if (trackBeforeShuffle) {
+        const newIndex = newQueue.findIndex(t => t.id === trackBeforeShuffle.id);
+        if(newIndex !== -1) {
+            setCurrentTrackIndex(newIndex);
+        } else if (newQueue.length > 0) {
+            setCurrentTrackIndex(0);
+        } else {
+            setCurrentTrackIndex(null);
+        }
+    }
+
+  }, [isShuffled, queue]);
   
   const setVolume = (vol: number) => {
     if (audioRef.current) {
@@ -299,16 +308,20 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audioRef.current?.pause();
       setIsPlaying(false);
       isPlayingRef.current = false;
+      playAfterLoadRef.current = false;
     } else {
       if (audioRef.current) {
-          audioRef.current.play().then(() => {
-              setIsPlaying(true);
-              isPlayingRef.current = true;
-          }).catch(e => {
-              console.error("Playback failed", e);
-              setIsPlaying(false);
-              isPlayingRef.current = false;
-          });
+          const playPromise = audioRef.current.play();
+          if (playPromise !== undefined) {
+              playPromise.then(() => {
+                setIsPlaying(true);
+                isPlayingRef.current = true;
+              }).catch(e => {
+                  console.error("Playback failed on toggle", e);
+                  setIsPlaying(false);
+                  isPlayingRef.current = false;
+              });
+          }
       }
     }
   }, [isPlaying, currentTrack, currentQueue, playTrack]);
@@ -319,6 +332,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         audioRef.current.currentTime = 0;
         setIsPlaying(false);
         isPlayingRef.current = false;
+        playAfterLoadRef.current = false;
     }
   }, []);
 
@@ -374,18 +388,21 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setDuration(0);
     if(audioRef.current) {
         audioRef.current.src = "";
+        // Resetting the audio element by removing the source and calling load()
+        // This is a common practice to clear the buffer and state of the audio element.
+        audioRef.current.load();
     }
   };
   
   const seek = (percentage: number) => {
-      if (audioRef.current && currentTrack) {
-          audioRef.current.currentTime = (percentage / 100) * duration;
+      if (audioRef.current && currentTrack && isFinite(audioRef.current.duration)) {
+          audioRef.current.currentTime = (percentage / 100) * audioRef.current.duration;
       }
   }
 
   const skipForward = () => {
-      if (audioRef.current && currentTrack) {
-          audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, duration);
+      if (audioRef.current && currentTrack && isFinite(audioRef.current.duration)) {
+          audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, audioRef.current.duration);
       }
   }
 
