@@ -144,11 +144,11 @@ function MidiSettings() {
     <div className="space-y-6">
         <Card>
             <CardHeader>
-                <CardTitle>MIDI Input</CardTitle>
+                <CardTitle>MIDI Configuration</CardTitle>
                 <CardDescription>Select a MIDI device to control playback.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <Select onValueChange={handleSelectMidiInput} value={selectedInputId || ""}>
+                <Select onValueChange={handleSelectMidiInput} value={selectedInputId || "no-devices"}>
                 <SelectTrigger>
                     <SelectValue placeholder="Select a MIDI input" />
                 </SelectTrigger>
@@ -168,7 +168,7 @@ function MidiSettings() {
         </Card>
         <Card>
             <CardHeader>
-                <CardTitle>MIDI Command Mappings</CardTitle>
+                <CardTitle>MIDI Mapping</CardTitle>
                 <CardDescription>Assign MIDI notes to player commands. Click "Learn" then press a key on your MIDI device.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -281,29 +281,9 @@ function OscSettings() {
                     <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
                 </CardContent>
             </Card>
-             <Card>
-                <CardHeader>
-                    <CardTitle>OSC Monitor</CardTitle>
-                    <CardDescription>Displays incoming OSC messages from the bridge.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ScrollArea className="h-48 w-full rounded-md border">
-                        <div className="p-4 font-mono text-xs">
-                        {oscMessages.length > 0 ? (
-                            oscMessages.map((msg, index) => (
-                                <p key={`${msg.timestamp}-${index}`}>
-                                    <span className="text-muted-foreground">[{msg.timestamp}]</span>{' '}
-                                    {msg.address} <span className="text-primary">{msg.args}</span>
-                                </p>
-                            ))
-                        ) : <p className="text-muted-foreground">Waiting for messages...</p>}
-                        </div>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-lg">Available OSC Commands</CardTitle>
+                    <CardTitle>Available OSC Commands (Mapping)</CardTitle>
                     <CardDescription>
                         Here are the OSC addresses to control the player.
                     </CardDescription>
@@ -325,6 +305,26 @@ function OscSettings() {
                             ))}
                         </TableBody>
                     </Table>
+                </CardContent>
+            </Card>
+             <Card>
+                <CardHeader>
+                    <CardTitle>OSC Monitor</CardTitle>
+                    <CardDescription>Displays incoming OSC messages from the bridge.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ScrollArea className="h-48 w-full rounded-md border">
+                        <div className="p-4 font-mono text-xs">
+                        {oscMessages.length > 0 ? (
+                            oscMessages.map((msg, index) => (
+                                <p key={`${msg.timestamp}-${index}`}>
+                                    <span className="text-muted-foreground">[{msg.timestamp}]</span>{' '}
+                                    {msg.address} <span className="text-primary">{msg.args}</span>
+                                </p>
+                            ))
+                        ) : <p className="text-muted-foreground">Waiting for messages...</p>}
+                        </div>
+                    </ScrollArea>
                 </CardContent>
             </Card>
         </div>

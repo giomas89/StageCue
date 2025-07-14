@@ -106,7 +106,7 @@ export default function SoundCueClient() {
                     Settings & Controls
                  </h2>
                </div>
-               <div className="flex-1 overflow-auto p-4">
+               <div className="flex-1 overflow-y-auto p-4">
                  <SettingsPanel />
                </div>
             </div>
