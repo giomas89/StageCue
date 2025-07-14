@@ -44,6 +44,7 @@ interface SoundCueContextType {
   audioOutputs: MediaDeviceInfo[];
   selectedAudioOutputId: string | null;
   setAudioOutput: (deviceId: string) => void;
+  reorderQueue: (startIndex: number, endIndex: number) => void;
 }
 
 export const SoundCueContext = createContext<SoundCueContextType | undefined>(undefined);
@@ -82,7 +83,7 @@ const loadSettings = (): Settings => {
                 ...parsed,
                 midi: { ...defaultSettings.midi, ...parsed.midi, mappings: {...defaultSettings.midi.mappings, ...parsed.midi?.mappings} },
                 osc: { ...defaultSettings.osc, ...parsed.osc },
-                audio: { ...defaultSettings.audio, ...parsed.audio },
+                audio: { ...defaultSettings.audio, ...parsed.audio, fadeIn: {...defaultSettings.audio.fadeIn, ...parsed.audio?.fadeIn}, fadeOut: {...defaultSettings.audio.fadeOut, ...parsed.audio?.fadeOut} },
             };
             return mergedSettings;
         }
@@ -157,7 +158,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     stopFade();
     if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
       const audio = audioRef.current;
-      const startVolume = audio.volume;
+      const startVolume = isMuted ? 0 : volume;
       const step = startVolume / (settings.audio.fadeOut.duration * 20); // 50ms steps
 
       fadeIntervalRef.current = setInterval(() => {
@@ -246,22 +247,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const handleError = (e: any) => {
         const error = (e.target as HTMLAudioElement).error;
         if (audio?.src && error) {
-            if (error.code === MediaError.MEDIA_ERR_DECODE) {
-                 toast({
-                    variant: "destructive",
-                    title: "Playback Error",
-                    description: `The audio file might be corrupt or in an unsupported format. Skipping to next.`
-                });
-                playNext(true);
-            } else {
-                 toast({
-                    variant: "destructive",
-                    title: "Playback Error",
-                    description: `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`
-                });
+            let errorMsg = `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`;
+            if (error.code === MediaError.MEDIA_ERR_DECODE || error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+                 errorMsg = `The audio file might be corrupt or in an unsupported format.`;
             }
+            toast({
+                variant: "destructive",
+                title: "Playback Error",
+                description: errorMsg,
+            });
+            setIsPlaying(false);
+            // Don't auto-skip to avoid loops with multiple bad files.
+            // playNext(true); 
         }
-        setIsPlaying(false);
     }
 
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -416,6 +414,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if (currentTrackIndex === null) return;
         if ((audioRef.current?.currentTime || 0) > 3) {
           audioRef.current!.currentTime = 0;
+          if(!isPlaying) {
+              setIsPlaying(true);
+          }
           fadeIn();
         } else {
           let prevIndex = currentTrackIndex - 1;
@@ -427,7 +428,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           }
         }
     });
-  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length]);
+  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying]);
 
   const clearQueue = () => {
     stopPlayback();
@@ -469,6 +470,32 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const toggleShuffle = () => setIsShuffled(prev => !prev);
   
+  const reorderQueue = (startIndex: number, endIndex: number) => {
+    if (isShuffled) {
+      toast({
+        title: "Reordering disabled",
+        description: "Please disable shuffle mode to reorder the playlist.",
+      });
+      return;
+    }
+    const result = Array.from(queue);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    _setQueue(result);
+
+    // Update currentTrackIndex if the currently playing track was moved
+    if (currentTrackIndex !== null) {
+      if (currentTrackIndex === startIndex) {
+        setCurrentTrackIndex(endIndex);
+      } else if (startIndex < currentTrackIndex && endIndex >= currentTrackIndex) {
+        setCurrentTrackIndex(currentTrackIndex - 1);
+      } else if (startIndex > currentTrackIndex && endIndex <= currentTrackIndex) {
+        setCurrentTrackIndex(currentTrackIndex + 1);
+      }
+    }
+  };
+
+
   if (!isHydrated) {
     return null; // or a loading spinner
   }
@@ -504,7 +531,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     skipBackward,
     audioOutputs,
     selectedAudioOutputId,
-    setAudioOutput
+    setAudioOutput,
+    reorderQueue
   };
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
