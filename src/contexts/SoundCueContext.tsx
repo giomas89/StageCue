@@ -154,7 +154,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             console.error("Failed to save settings to localStorage", error);
         }
     }
-  }, [settings, isHydrated, volume]);
+  }, [settings, isHydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getAudioOutputs = useCallback(async () => {
     try {
@@ -251,8 +251,37 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       stopAction();
     }
   }, [fadeOutAnd]);
+  
+  const playTrack = useCallback((index: number, andPlay = true) => {
+    stopFade();
+    const trackToPlay = currentQueue[index];
+    if (trackToPlay && audioRef.current) {
+        setCurrentTrackIndex(index);
+        audioRef.current.src = trackToPlay.url;
+        audioRef.current.load();
+        
+        const playPromise = audioRef.current.play();
 
-  const playNext = useCallback((fromError: boolean = false) => {
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                if (andPlay) {
+                    setIsPlaying(true);
+                    fadeIn();
+                } else {
+                    audioRef.current?.pause();
+                    setIsPlaying(false);
+                }
+            }).catch(e => {
+                console.error("Playback failed on playTrack", e);
+                setIsPlaying(false);
+                toast({ variant: "destructive", title: "Playback Error", description: "Could not play the selected track." });
+            });
+        }
+    }
+}, [currentQueue, fadeIn, toast]);
+
+
+ const playNext = useCallback((fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
     
     let nextIndex = currentTrackIndex + 1;
@@ -268,40 +297,17 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         return;
       }
     }
-    if (nextIndex === currentTrackIndex && currentQueue.length === 1 && !fromError) {
+    
+    const isSameTrack = nextIndex === currentTrackIndex;
+    const isSingleTrackLoop = currentQueue.length === 1;
+
+    if (isSameTrack && isSingleTrackLoop && !fromError) {
         stopPlayback(false);
         return;
     }
-    playTrack(nextIndex, true);
-  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback]);
 
-  const playTrack = useCallback((index: number, andPlay = true) => {
-    const playLogic = () => {
-        const trackToPlay = currentQueue[index];
-        if (trackToPlay && audioRef.current) {
-            setCurrentTrackIndex(index);
-            audioRef.current.src = trackToPlay.url;
-            audioRef.current.load();
-            if (andPlay) {
-                setIsPlaying(true);
-                audioRef.current.play().then(() => {
-                    fadeIn();
-                }).catch(e => {
-                    console.error("Playback failed on playTrack", e);
-                    setIsPlaying(false);
-                });
-            } else {
-                setIsPlaying(false);
-            }
-        }
-    };
-
-    if (isPlaying) {
-        fadeOutAnd(playLogic);
-    } else {
-        playLogic();
-    }
-  }, [currentQueue, isPlaying, fadeIn, fadeOutAnd]);
+    fadeOutAnd(() => playTrack(nextIndex, true));
+  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, fadeOutAnd]);
 
 
   useEffect(() => {
@@ -330,29 +336,42 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     };
     
     const handleError = (e: Event) => {
+      stopFade();
       const error = (e.target as HTMLAudioElement).error;
       if (!audio?.src || !error) return;
-    
+
+      const trackName = currentTrack?.name || 'Unknown Track';
       let errorMsg = `Could not play audio. Code: ${error.code}, Message: ${error.message}`;
-      if (error.code === MediaError.MEDIA_ERR_DECODE || error.code === MediaError.MEDIA_ERR_ABORTED && error.message.includes("DEMUXER_ERROR_COULD_NOT_OPEN")) {
-        errorMsg = `The audio file might be corrupt or in an unsupported format.`;
-      } else if (error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-        errorMsg = `The audio format is not supported.`;
-      } else if (error.code === MediaError.MEDIA_ERR_NETWORK) {
-        errorMsg = `A network error caused the download to fail.`;
-      } else if (error.code === MediaError.MEDIA_ERR_ABORTED) {
-        // Don't show toast for user-initiated aborts (e.g. changing track)
-        return;
+
+      switch (error.code) {
+        case MediaError.MEDIA_ERR_ABORTED:
+          // This often happens when changing tracks, so we don't want to show an error.
+          console.log(`Playback aborted for ${trackName}. This is usually normal.`);
+          return;
+        case MediaError.MEDIA_ERR_DECODE:
+            errorMsg = `The audio file might be corrupt or in an unsupported format.`;
+            break;
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            errorMsg = `The audio format is not supported.`;
+            break;
+        case MediaError.MEDIA_ERR_NETWORK:
+            errorMsg = `A network error caused the download to fail.`;
+            break;
       }
       
       toast({
         variant: "destructive",
-        title: `Playback Error: ${currentTrack?.name || 'Unknown Track'}`,
+        title: `Playback Error: ${trackName}`,
         description: errorMsg,
       });
 
       setIsPlaying(false);
-      stopFade();
+      
+      // Don't auto-skip if the error was on the last track and not repeating all
+      if (repeatMode !== 'all' && currentTrackIndex === currentQueue.length - 1) {
+          return;
+      }
+      // playNext(true); // Disable auto-looping on error
     };
     
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -366,7 +385,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrackIndex, currentQueue.length]);
   
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
@@ -450,6 +469,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }
 
   const togglePlayPause = useCallback(() => {
+    if (isFading) return;
+
     if (!currentTrack) {
         if (currentQueue.length > 0) {
             playTrack(0, true);
@@ -457,32 +478,34 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         return;
     };
     if (isPlaying) {
-      setIsPlaying(false); // Immediate feedback
       fadeOutAnd(() => {
         audioRef.current?.pause();
       });
+      setIsPlaying(false);
     } else {
       if (audioRef.current) {
-          setIsPlaying(true);
           audioRef.current.play().then(() => {
             fadeIn();
           }).catch(e => {
               console.error("Playback failed on toggle", e);
               setIsPlaying(false);
           });
+          setIsPlaying(true);
       }
     }
-  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeOutAnd, fadeIn]);
+  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeOutAnd, fadeIn, isFading]);
 
   const playPrev = useCallback(() => {
-    fadeOutAnd(() => {
+    if (isFading) return;
+    
+    const logic = () => {
         if (currentTrackIndex === null || !audioRef.current) return;
         
         if (audioRef.current.currentTime > 3) {
           audioRef.current.currentTime = 0;
           if(!isPlaying) {
-            setIsPlaying(true);
             audioRef.current.play();
+            setIsPlaying(true);
           }
           fadeIn();
         } else {
@@ -494,8 +517,14 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             playTrack(prevIndex, true);
           }
         }
-    });
-  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeOutAnd, fadeIn]);
+    }
+
+    if (isPlaying) {
+      fadeOutAnd(logic);
+    } else {
+      logic();
+    }
+  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeOutAnd, fadeIn, isFading]);
 
   const clearQueue = () => {
     stopPlayback(false);
