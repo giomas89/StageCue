@@ -146,7 +146,31 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setSelectedAudioOutputId(loadedSettings.audio.outputId);
     setIsHydrated(true);
   }, []);
+
+  const volume = settings.audio.volume;
   
+  const setVolume = (vol: number) => {
+      let newVol = vol;
+      if (settings.audio.maxVolume.enabled) {
+          newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
+      }
+      
+      if (audioRef.current) {
+          stopFade();
+          audioRef.current.volume = newVol;
+      }
+  
+      if (newVol > 0 && isMuted) {
+        setIsMuted(false);
+        if(audioRef.current) audioRef.current.muted = false;
+      }
+  
+      _setSettings(s => {
+        if (s.audio.volume === newVol) return s;
+        return {...s, audio: {...s.audio, volume: newVol}};
+      });
+    }
+
   const setSettings = useCallback((setter: React.SetStateAction<Settings>) => {
     _setSettings(prevSettings => {
         const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
@@ -160,10 +184,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         // When max volume settings change, adjust current volume if needed
         if (newSettings.audio.maxVolume.enabled && newSettings.audio.volume > newSettings.audio.maxVolume.level / 100) {
             const adjustedVolume = newSettings.audio.maxVolume.level / 100;
-            if (audioRef.current) {
+             if (audioRef.current) {
                 audioRef.current.volume = adjustedVolume;
             }
-            // Return updated settings with adjusted volume
             return {
                 ...newSettings,
                 audio: {
@@ -171,7 +194,20 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
                     volume: adjustedVolume,
                 },
             };
+        } else if (newSettings.audio.maxVolume.enabled) {
+            const adjustedVolume = newSettings.audio.maxVolume.level / 100;
+             if (audioRef.current) {
+                audioRef.current.volume = adjustedVolume;
+            }
+             return {
+                ...newSettings,
+                audio: {
+                    ...newSettings.audio,
+                    volume: adjustedVolume,
+                },
+            };
         }
+
 
         if (audioRef.current && audioRef.current.volume !== newSettings.audio.volume) {
           audioRef.current.volume = newSettings.audio.volume;
@@ -190,29 +226,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setFadeCountdown(null);
   }
 
- const volume = settings.audio.volume;
-
- const setVolume = (vol: number) => {
-    let newVol = vol;
-    if (settings.audio.maxVolume.enabled) {
-      newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
-    }
-    
-    if (audioRef.current) {
-        stopFade();
-        audioRef.current.volume = newVol;
-    }
-
-    if (newVol > 0 && isMuted) {
-      setIsMuted(false);
-      if(audioRef.current) audioRef.current.muted = false;
-    }
-
-    // Only update the volume part of the settings, don't trigger a full 'setSettings' call
-    _setSettings(s => ({...s, audio: {...s.audio, volume: newVol}}));
-  }
-  
-  const getAudioOutputs = useCallback(async () => {
+ const getAudioOutputs = useCallback(async () => {
     try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
             return;
@@ -634,7 +648,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         } catch(e) {
             console.error("Could not access your MIDI devices.", e);
             if (e instanceof Error && e.name === 'SecurityError') {
-                 toast({ variant: "destructive", title: "MIDI Permissions", description: "MIDI access is disabled by a permissions policy." });
+                 toast({ variant: "destructive", title: "MIDI Permissions Denied", description: "MIDI access is disabled by browser permissions policy." });
             } else {
                  toast({ variant: "destructive", title: "MIDI Error", description: "Could not access MIDI devices." });
             }
@@ -748,5 +762,3 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
 }
-
-    
