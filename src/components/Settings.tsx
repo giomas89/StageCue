@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -374,7 +375,6 @@ function GeneralSettings() {
                     const text = e.target?.result;
                     if (typeof text !== 'string') throw new Error("File could not be read");
                     const importedSettings = JSON.parse(text);
-                    // Add validation here if needed
                     setSettings(importedSettings);
                     toast({title: "Settings Imported"});
                 } catch (error) {
@@ -393,7 +393,7 @@ function GeneralSettings() {
                     <CardDescription>Choose where to play the audio.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                     <Select onValueChange={setAudioOutput} value={selectedAudioOutputId || 'default'}>
+                     <Select onValuechange={setAudioOutput} value={selectedAudioOutputId || 'default'}>
                         <SelectTrigger>
                             <SelectValue placeholder="Select an audio output" />
                         </SelectTrigger>
@@ -408,6 +408,66 @@ function GeneralSettings() {
                     </Select>
                 </CardContent>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Audio Effects</CardTitle>
+                    <CardDescription>Configure fade-in and fade-out effects for smooth transitions.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between space-x-2">
+                        <Label htmlFor="fadein-enabled" className="flex flex-col space-y-1">
+                            <span>Fade-in</span>
+                            <span className="font-normal leading-snug text-muted-foreground">
+                                Gradually increase volume when playback starts.
+                            </span>
+                        </Label>
+                        <Switch
+                            id="fadein-enabled"
+                            checked={settings.audio.fadeIn.enabled}
+                            onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, fadeIn: {...s.audio.fadeIn, enabled: checked }}}))}
+                        />
+                    </div>
+                     <div className={cn("space-y-2", !settings.audio.fadeIn.enabled && "opacity-50")}>
+                        <Label htmlFor="fadein-duration">Fade-in Duration (seconds)</Label>
+                        <Input
+                            id="fadein-duration"
+                            type="number"
+                            min="0.1"
+                            step="0.1"
+                            value={settings.audio.fadeIn.duration}
+                            onChange={(e) => setSettings(s => ({...s, audio: {...s.audio, fadeIn: {...s.audio.fadeIn, duration: Number(e.target.value) }}}))}
+                            disabled={!settings.audio.fadeIn.enabled}
+                        />
+                    </div>
+                     <div className="flex items-center justify-between space-x-2">
+                        <Label htmlFor="fadeout-enabled" className="flex flex-col space-y-1">
+                            <span>Fade-out</span>
+                            <span className="font-normal leading-snug text-muted-foreground">
+                                Gradually decrease volume when playback stops.
+                            </span>
+                        </Label>
+                        <Switch
+                            id="fadeout-enabled"
+                            checked={settings.audio.fadeOut.enabled}
+                            onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, fadeOut: {...s.audio.fadeOut, enabled: checked }}}))}
+                        />
+                    </div>
+                     <div className={cn("space-y-2", !settings.audio.fadeOut.enabled && "opacity-50")}>
+                        <Label htmlFor="fadeout-duration">Fade-out Duration (seconds)</Label>
+                        <Input
+                            id="fadeout-duration"
+                            type="number"
+                            min="0.1"
+                            step="0.1"
+                            value={settings.audio.fadeOut.duration}
+                            onChange={(e) => setSettings(s => ({...s, audio: {...s.audio, fadeOut: {...s.audio.fadeOut, duration: Number(e.target.value) }}}))}
+                            disabled={!settings.audio.fadeOut.enabled}
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
 
             <Card>
                 <CardHeader>

@@ -27,5 +27,13 @@ export interface Settings {
   };
   audio: {
     outputId: string | null;
+    fadeIn: {
+      enabled: boolean;
+      duration: number;
+    },
+    fadeOut: {
+      enabled: boolean;
+      duration: number;
+    }
   }
 }

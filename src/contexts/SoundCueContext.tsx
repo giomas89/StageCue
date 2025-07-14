@@ -61,7 +61,11 @@ const defaultSettings: Settings = {
       },
     },
     osc: { ip: '127.0.0.1', port: 9000 },
-    audio: { outputId: 'default' }
+    audio: { 
+      outputId: 'default',
+      fadeIn: { enabled: false, duration: 2 },
+      fadeOut: { enabled: false, duration: 2 },
+    }
 };
 
 const loadSettings = (): Settings => {
@@ -72,6 +76,7 @@ const loadSettings = (): Settings => {
         const savedSettings = localStorage.getItem('soundcue-settings');
         if (savedSettings) {
             const parsed = JSON.parse(savedSettings);
+            // Deep merge to prevent losing nested properties if they don't exist in saved settings
             const mergedSettings = {
                 ...defaultSettings,
                 ...parsed,
@@ -99,27 +104,38 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+  
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>(settings.audio.outputId);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   
   useEffect(() => {
-    try {
-        const settingsJson = JSON.stringify(settings);
-        localStorage.setItem('soundcue-settings', settingsJson);
-    } catch (error) {
-        console.error("Failed to save settings to localStorage", error);
+    // Hydration-safe settings load
+    setSettings(loadSettings());
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (isHydrated) {
+        try {
+            const settingsJson = JSON.stringify(settings);
+            localStorage.setItem('soundcue-settings', settingsJson);
+            setSelectedAudioOutputId(settings.audio.outputId);
+        } catch (error) {
+            console.error("Failed to save settings to localStorage", error);
+        }
     }
-  }, [settings]);
+  }, [settings, isHydrated]);
 
   const getAudioOutputs = useCallback(async () => {
     try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-            console.warn("Media devices API not available.");
             return;
         }
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -129,7 +145,55 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         console.error("Error enumerating audio devices:", err);
     }
   }, []);
+  
+  const stopFade = () => {
+    if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+    }
+  }
 
+  const fadeOutAnd = (callback: () => void) => {
+    stopFade();
+    if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
+      const audio = audioRef.current;
+      const startVolume = audio.volume;
+      const step = startVolume / (settings.audio.fadeOut.duration * 20); // 50ms steps
+
+      fadeIntervalRef.current = setInterval(() => {
+        const newVolume = Math.max(0, audio.volume - step);
+        audio.volume = newVolume;
+        if (newVolume <= 0) {
+          stopFade();
+          callback();
+          audio.volume = startVolume; // Reset for next play
+        }
+      }, 50);
+    } else {
+      callback();
+    }
+  };
+
+  const fadeIn = () => {
+      stopFade();
+      if (settings.audio.fadeIn.enabled && settings.audio.fadeIn.duration > 0 && audioRef.current) {
+        const audio = audioRef.current;
+        const targetVolume = isMuted ? 0 : volume;
+        audio.volume = 0;
+        const step = targetVolume / (settings.audio.fadeIn.duration * 20); // 50ms steps
+
+        fadeIntervalRef.current = setInterval(() => {
+            const newVolume = Math.min(targetVolume, audio.volume + step);
+            audio.volume = newVolume;
+            if (newVolume >= targetVolume) {
+                stopFade();
+            }
+        }, 50);
+      } else if (audioRef.current) {
+          audioRef.current.volume = isMuted ? 0 : volume;
+      }
+  }
+  
   const playNext = useCallback((fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
     
@@ -147,7 +211,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         return;
       }
     }
-    if (nextIndex === currentTrackIndex && currentQueue.length === 1) {
+    if (nextIndex === currentTrackIndex && currentQueue.length === 1 && !fromError) {
         stopPlayback();
         return;
     }
@@ -162,10 +226,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     
     getAudioOutputs();
     
-    if (settings.audio.outputId) {
-        setAudioOutput(settings.audio.outputId);
-    }
-    
     const handleTimeUpdate = () => {
       if (!audio) return;
       setProgress((audio.currentTime / audio.duration) * 100 || 0);
@@ -173,22 +233,33 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     };
 
     const handleEnded = () => {
-        if (repeatMode === 'one') {
-            audio.currentTime = 0;
-            audio.play();
-        } else {
-            playNext();
-        }
+      fadeOutAnd(() => {
+          if (repeatMode === 'one') {
+              audio.currentTime = 0;
+              audio.play().then(fadeIn);
+          } else {
+              playNext();
+          }
+      });
     };
     
     const handleError = (e: any) => {
         const error = (e.target as HTMLAudioElement).error;
         if (audio?.src && error) {
-             toast({
-                variant: "destructive",
-                title: "Playback Error",
-                description: `Could not play the audio file. It might be corrupt or in an unsupported format. Code: ${error.code}, Message: ${error.message}`
-            });
+            if (error.code === MediaError.MEDIA_ERR_DECODE) {
+                 toast({
+                    variant: "destructive",
+                    title: "Playback Error",
+                    description: `The audio file might be corrupt or in an unsupported format. Skipping to next.`
+                });
+                playNext(true);
+            } else {
+                 toast({
+                    variant: "destructive",
+                    title: "Playback Error",
+                    description: `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`
+                });
+            }
         }
         setIsPlaying(false);
     }
@@ -204,7 +275,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, settings.audio.outputId, playNext, repeatMode]);
+  }, [toast, getAudioOutputs, playNext, repeatMode]);
   
   const currentQueue = isShuffled ? shuffledQueue : queue;
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
@@ -218,6 +289,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       if (andPlay) {
         audioRef.current.play().then(() => {
           setIsPlaying(true);
+          fadeIn();
         }).catch(e => {
           console.error("Playback failed on playTrack", e);
           setIsPlaying(false);
@@ -266,18 +338,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [isShuffled, queue, currentTrack]);
   
   const setVolume = (vol: number) => {
+    setInternalVolume(vol);
     if (audioRef.current) {
+        stopFade();
         audioRef.current.volume = vol;
-        setInternalVolume(vol);
-        if(vol > 0 && isMuted) setIsMuted(false);
     }
+    if(vol > 0 && isMuted) setIsMuted(false);
   }
 
   const setAudioOutput = useCallback(async (deviceId: string) => {
     if (audioRef.current && 'setSinkId' in HTMLAudioElement.prototype) {
       try {
         await (audioRef.current as any).setSinkId(deviceId);
-        setSelectedAudioOutputId(deviceId);
         setSettings(s => ({ ...s, audio: { ...s.audio, outputId: deviceId } }));
       } catch (error) {
         console.error("Error setting audio output:", error);
@@ -297,10 +369,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [toast, setSettings]);
 
   const toggleMute = () => {
-      setIsMuted(prev => {
-          if (audioRef.current) audioRef.current.muted = !prev;
-          return !prev;
-      })
+      const newMuteState = !isMuted;
+      setIsMuted(newMuteState);
+      if (audioRef.current) {
+        audioRef.current.muted = newMuteState;
+      }
   }
 
   const togglePlayPause = useCallback(() => {
@@ -311,12 +384,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         return;
     };
     if (isPlaying) {
-      audioRef.current?.pause();
-      setIsPlaying(false);
+      fadeOutAnd(() => {
+        audioRef.current?.pause();
+        setIsPlaying(false);
+      });
     } else {
       if (audioRef.current) {
           audioRef.current.play().then(() => {
             setIsPlaying(true);
+            fadeIn();
           }).catch(e => {
               console.error("Playback failed on toggle", e);
               setIsPlaying(false);
@@ -326,32 +402,40 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [isPlaying, currentTrack, currentQueue, playTrack]);
 
   const stopPlayback = useCallback(() => {
-    if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsPlaying(false);
-    }
+    fadeOutAnd(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            setIsPlaying(false);
+        }
+    })
   }, []);
 
   const playPrev = useCallback(() => {
-    if (currentTrackIndex === null) return;
-    if ((audioRef.current?.currentTime || 0) > 3) {
-      audioRef.current!.currentTime = 0;
-    } else {
-      let prevIndex = currentTrackIndex - 1;
-      if (prevIndex < 0) {
-        prevIndex = repeatMode === 'all' ? currentQueue.length - 1 : -1;
-      }
-      if (prevIndex >= 0) {
-        playTrack(prevIndex, true);
-      }
-    }
+    fadeOutAnd(() => {
+        if (currentTrackIndex === null) return;
+        if ((audioRef.current?.currentTime || 0) > 3) {
+          audioRef.current!.currentTime = 0;
+          fadeIn();
+        } else {
+          let prevIndex = currentTrackIndex - 1;
+          if (prevIndex < 0) {
+            prevIndex = repeatMode === 'all' ? currentQueue.length - 1 : -1;
+          }
+          if (prevIndex >= 0) {
+            playTrack(prevIndex, true);
+          }
+        }
+    });
   }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length]);
 
   const clearQueue = () => {
     stopPlayback();
-    // Revoke old object URLs
-    queue.forEach(track => URL.revokeObjectURL(track.url));
+    queue.forEach(track => {
+      if (track.url.startsWith('blob:')) {
+        URL.revokeObjectURL(track.url);
+      }
+    });
 
     _setQueue([]);
     setShuffledQueue([]);
@@ -385,6 +469,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const toggleShuffle = () => setIsShuffled(prev => !prev);
   
+  if (!isHydrated) {
+    return null; // or a loading spinner
+  }
+
   const value = {
     queue,
     setQueue,
