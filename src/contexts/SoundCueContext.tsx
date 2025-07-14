@@ -159,9 +159,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }
 
   const setSettings = (setter: React.SetStateAction<Settings>) => {
-    let newSettings: Settings;
     _setSettings(prevSettings => {
-        newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
+        const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
         
         try {
             localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
@@ -170,10 +169,13 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
              console.error("Failed to save settings to localStorage", error);
         }
 
-        // Post-update logic that depends on the new settings and current volume
         const maxVol = newSettings.audio.maxVolume.level / 100;
-        if (newSettings.audio.maxVolume.enabled && volume > maxVol) {
-            setVolume(maxVol);
+        const maxVolJustEnabled = newSettings.audio.maxVolume.enabled && !prevSettings.audio.maxVolume.enabled;
+
+        if (maxVolJustEnabled) {
+          setVolume(maxVol);
+        } else if (newSettings.audio.maxVolume.enabled && volume > maxVol) {
+          setVolume(maxVol);
         }
         
         return newSettings;
@@ -255,7 +257,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           audioRef.current.volume = isMuted ? 0 : volume;
       }
   }, [settings.audio.fadeIn, isMuted, volume]);
-
+  
   const stopPlayback = useCallback((fade = true) => {
     const stopAction = () => {
       if (audioRef.current) {
@@ -301,7 +303,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     }
   }, [currentQueue, fadeIn, toast]);
 
- const playNext = useCallback((fromError: boolean = false) => {
+  const playNext = useCallback((fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
     
     let nextIndex = currentTrackIndex + 1;
@@ -392,7 +394,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack]);
   
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
