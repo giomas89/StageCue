@@ -134,18 +134,20 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (currentTrackIndex === null) return;
     
     let nextIndex = currentTrackIndex + 1;
-    if (nextIndex >= (isShuffled ? shuffledQueue : queue).length) {
+    const currentQueue = isShuffled ? shuffledQueue : queue;
+    
+    if (nextIndex >= currentQueue.length) {
       if (repeatMode === 'all') {
         nextIndex = 0;
       } else {
         stopPlayback();
-        if ((isShuffled ? shuffledQueue : queue).length > 0) {
+        if (currentQueue.length > 0) {
             playTrack(0, false);
         }
         return;
       }
     }
-    if (nextIndex === currentTrackIndex && (isShuffled ? shuffledQueue : queue).length === 1) {
+    if (nextIndex === currentTrackIndex && currentQueue.length === 1) {
         stopPlayback();
         return;
     }
@@ -189,7 +191,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             });
         }
         setIsPlaying(false);
-        playNext(true);
     }
 
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -209,7 +210,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
 
   const playTrack = useCallback((index: number, andPlay = true) => {
-    const trackToPlay = currentQueue[index];
+    const trackToPlay = (isShuffled ? shuffledQueue : queue)[index];
     if (trackToPlay && audioRef.current) {
       setCurrentTrackIndex(index);
       audioRef.current.src = trackToPlay.url;
@@ -225,17 +226,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         setIsPlaying(false);
       }
     }
-  }, [currentQueue]);
+  }, [queue, isShuffled, shuffledQueue]);
 
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
-    const newQueue = typeof setter === 'function' ? setter(queue) : setter;
-    const wasEmpty = queue.length === 0;
+    _setQueue(currentQueue => {
+        const newQueue = typeof setter === 'function' ? setter(currentQueue) : setter;
+        const wasEmpty = currentQueue.length === 0;
 
-    _setQueue(newQueue);
-
-    if (wasEmpty && newQueue.length > 0 && currentTrackIndex === null) {
-      setTimeout(() => playTrack(0, false), 0);
-    }
+        if(wasEmpty && newQueue.length > 0 && currentTrackIndex === null) {
+            setTimeout(() => playTrack(0, false), 0);
+        }
+        return newQueue;
+    });
   };
 
   useEffect(() => {
