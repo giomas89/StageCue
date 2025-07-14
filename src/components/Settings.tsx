@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -47,7 +47,6 @@ const COMMAND_ORDER: MidiCommand[] = [
 function MidiSettings() {
   const { 
     settings, 
-    setSettings, 
     midiInputs, 
     lastMidiMessage, 
     learningCommand, 
@@ -55,8 +54,6 @@ function MidiSettings() {
     selectMidiInput
   } = useSoundCue();
   
-  const { toast } = useToast();
-
   const selectedInputId = settings.midi.inputId;
   const [lastMessages, setLastMessages] = useState<(typeof lastMidiMessage)[]>([]);
 
@@ -65,21 +62,6 @@ function MidiSettings() {
         setLastMessages(prev => [lastMidiMessage, ...prev.slice(0, 49)]);
     }
   }, [lastMidiMessage]);
-  
-  useEffect(() => {
-    if (learningCommand && lastMidiMessage?.type === 'Note On' && lastMidiMessage.velocity > 0) {
-        const note = lastMidiMessage.note;
-        setSettings(s => ({
-            ...s,
-            midi: {
-                ...s.midi,
-                mappings: { ...s.midi.mappings, [learningCommand]: note }
-            }
-        }));
-        toast({ title: "MIDI Learned", description: `Assigned Note ${note} to ${COMMAND_LABELS[learningCommand]}`});
-        setLearningCommand(null);
-    }
-  }, [learningCommand, lastMidiMessage, setSettings, toast, setLearningCommand]);
 
   const formatMidiNote = (note: number | null | undefined) => {
     if (note === null || note === undefined) return 'N/A';
@@ -93,6 +75,10 @@ function MidiSettings() {
     if (id === 'no-devices') return;
     selectMidiInput(id);
   };
+
+  const startLearning = (command: MidiCommand) => {
+    setLearningCommand(command);
+  }
 
   return (
     <Tabs defaultValue="config" className="w-full">
@@ -151,7 +137,7 @@ function MidiSettings() {
                                     <Button 
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setLearningCommand(cmd)}
+                                        onClick={() => startLearning(cmd)}
                                         disabled={!selectedInputId}
                                         className={cn(learningCommand === cmd && "bg-destructive text-destructive-foreground")}
                                     >
@@ -276,7 +262,7 @@ function OscSettings() {
                 </Card>
             </TabsContent>
             <TabsContent value="monitor" className="mt-4">
-                <Card>
+                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
                     </CardHeader>
@@ -310,9 +296,7 @@ function GeneralSettings() {
         setSettings(s => {
             const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}};
             if (checked) {
-              if(s.audio.volume > newSettings.audio.maxVolume.level / 100) {
-                 newSettings.audio.volume = newSettings.audio.maxVolume.level / 100;
-              }
+              newSettings.audio.volume = newSettings.audio.maxVolume.level / 100;
             }
             return newSettings;
         });
@@ -513,3 +497,5 @@ export default function SettingsPanel() {
     </Tabs>
   );
 }
+
+    
