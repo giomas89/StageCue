@@ -205,7 +205,7 @@ export default function Queue() {
                     <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
                     {queue.length > 0 ? (
                         queue.map((track, index) => (
-                        <Draggable key={track.id} draggableId={track.id} index={index}>
+                        <Draggable key={track.id} draggableId={track.id} index={index} isDragDisabled={isShuffled}>
                             {(provided, snapshot) => (
                             <li
                                 ref={provided.innerRef}
@@ -219,7 +219,13 @@ export default function Queue() {
                                 )}
                             >
                                 <div className="flex items-center gap-3">
-                                    <GripVertical {...provided.dragHandleProps} className="w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100 cursor-grab" />
+                                    <GripVertical 
+                                      {...provided.dragHandleProps} 
+                                      className={cn(
+                                        "w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100",
+                                        isShuffled ? 'cursor-not-allowed opacity-25' : 'cursor-grab'
+                                      )}
+                                     />
                                     <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
                                     <span className="font-medium cursor-default">{track.name}</span>
                                 </div>
