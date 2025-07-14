@@ -117,7 +117,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
   
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [settings, _setSettings] = useState<Settings>(defaultSettings);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
@@ -132,29 +132,38 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Hydration-safe settings load
-    setSettings(loadSettings());
+    _setSettings(loadSettings());
     setIsHydrated(true);
   }, []);
+  
+  const setSettings = (setter: React.SetStateAction<Settings>) => {
+    _setSettings(prevSettings => {
+        const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
+
+        // Correct max volume logic
+        if (newSettings.audio.maxVolume.enabled) {
+            const maxVol = newSettings.audio.maxVolume.level / 100;
+            if (volume > maxVol) {
+                setVolume(maxVol);
+            }
+        }
+        
+        try {
+            localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
+            setSelectedAudioOutputId(newSettings.audio.outputId);
+        } catch (error) {
+             console.error("Failed to save settings to localStorage", error);
+        }
+        
+        return newSettings;
+    });
+  };
 
   useEffect(() => {
     if (isHydrated) {
-        try {
-            const settingsJson = JSON.stringify(settings);
-            localStorage.setItem('soundcue-settings', settingsJson);
-            setSelectedAudioOutputId(settings.audio.outputId);
-            
-            // Enforce max volume limit
-            if (settings.audio.maxVolume.enabled) {
-              const maxVol = settings.audio.maxVolume.level / 100;
-              if (volume > maxVol) {
-                setVolume(maxVol);
-              }
-            }
-        } catch (error) {
-            console.error("Failed to save settings to localStorage", error);
-        }
+        setSettings(loadSettings());
     }
-  }, [settings, isHydrated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
 
   const getAudioOutputs = useCallback(async () => {
     try {
@@ -236,21 +245,21 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [settings.audio.fadeIn, isMuted, volume]);
   
   const stopPlayback = useCallback((fade = true) => {
-    setIsPlaying(false);
     const stopAction = () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
+      setIsPlaying(false);
     };
 
-    if (fade) {
+    if (fade && isPlaying) {
       fadeOutAnd(stopAction);
     } else {
       stopFade();
       stopAction();
     }
-  }, [fadeOutAnd]);
+  }, [fadeOutAnd, isPlaying]);
   
   const playTrack = useCallback((index: number, andPlay = true) => {
     stopFade();
@@ -298,14 +307,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    const isSameTrack = nextIndex === currentTrackIndex;
-    const isSingleTrackLoop = currentQueue.length === 1;
-
-    if (isSameTrack && isSingleTrackLoop && !fromError) {
-        stopPlayback(false);
-        return;
-    }
-
     fadeOutAnd(() => playTrack(nextIndex, true));
   }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, fadeOutAnd]);
 
@@ -367,11 +368,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
       setIsPlaying(false);
       
-      // Don't auto-skip if the error was on the last track and not repeating all
-      if (repeatMode !== 'all' && currentTrackIndex === currentQueue.length - 1) {
-          return;
+      if (currentTrackIndex === currentQueue.length - 1 && repeatMode !== 'all') {
+        return;
       }
-      // playNext(true); // Disable auto-looping on error
+      playNext(true);
     };
     
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -504,10 +504,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if (audioRef.current.currentTime > 3) {
           audioRef.current.currentTime = 0;
           if(!isPlaying) {
-            audioRef.current.play();
+            audioRef.current.play().then(fadeIn).catch(e => console.error(e));
             setIsPlaying(true);
+          } else {
+            fadeIn();
           }
-          fadeIn();
         } else {
           let prevIndex = currentTrackIndex - 1;
           if (prevIndex < 0) {
