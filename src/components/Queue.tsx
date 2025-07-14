@@ -130,7 +130,7 @@ export default function Queue() {
   };
 
   const onDragEnd = (result: DropResult) => {
-    if (!result.destination) {
+    if (!result.destination || isShuffled) {
       return;
     }
     reorderQueue(result.source.index, result.destination.index);

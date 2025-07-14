@@ -131,10 +131,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
   
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
-  const [audioSettings, setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [settings, _setSettings] = useState<Settings>(defaultSettings);
+  const [audioSettings, _setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
+  const [volume, _setVolume] = useState(1);
+  const [isMuted, _setIsMuted] = useState(false);
 
   const [isHydrated, setIsHydrated] = useState(false);
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
@@ -151,14 +151,56 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
   const selectedAudioOutputId = audioSettings.outputId;
 
+  const setSettings = useCallback((arg: React.SetStateAction<Settings>) => {
+    _setSettings(arg)
+  }, []);
+
+  const setAudioSettings = useCallback((arg: React.SetStateAction<AudioSettings>) => {
+    _setAudioSettings(arg)
+  }, []);
+
+  const setVolume = useCallback((arg: React.SetStateAction<number>) => {
+    _setVolume(prevVolume => {
+        const newVolume = typeof arg === 'function' ? arg(prevVolume) : arg;
+        if (audioRef.current) {
+            let finalVolume = newVolume;
+            if (audioSettings.maxVolume.enabled) {
+                finalVolume = Math.min(newVolume, audioSettings.maxVolume.level / 100);
+            }
+            audioRef.current.volume = finalVolume;
+        }
+        return newVolume;
+    });
+  }, [audioSettings.maxVolume]);
+  
+  const toggleMute = useCallback(() => {
+    _setIsMuted(prev => {
+        const newMuted = !prev;
+        if (audioRef.current) {
+            audioRef.current.muted = newMuted;
+        }
+        return newMuted;
+    });
+  }, []);
+  
+  const setIsMuted = useCallback((arg: React.SetStateAction<boolean>) => {
+     _setIsMuted(prev => {
+        const newMuted = typeof arg === 'function' ? arg(prev) : arg;
+        if (audioRef.current) {
+            audioRef.current.muted = newMuted;
+        }
+        return newMuted;
+    });
+  }, []);
+
   useEffect(() => {
     const { settings: loadedSettings, audioSettings: loadedAudioSettings, volume: loadedVolume, isMuted: loadedIsMuted } = loadInitialState();
     setSettings(loadedSettings);
-    setAudioSettings(loadedAudioSettings);
-    setVolume(loadedVolume);
-    setIsMuted(loadedIsMuted);
+    _setAudioSettings(loadedAudioSettings);
+    _setVolume(loadedVolume);
+    _setIsMuted(loadedIsMuted);
     setIsHydrated(true);
-  }, []);
+  }, [setSettings]);
   
   useEffect(() => {
     if (isHydrated) {
@@ -200,7 +242,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioOutputs(outputs);
-    } catch (err) {
+    } catch (err) => {
         console.error("Error enumerating audio devices:", err);
     }
   }, []);
@@ -477,7 +519,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           description: "Your browser does not support changing audio output devices.",
         });
     }
-  }, [toast]);
+  }, [toast, setAudioSettings]);
 
   const togglePlayPause = useCallback(() => {
     if (isFading) return;
@@ -637,11 +679,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const reorderQueue = useCallback((startIndex: number, endIndex: number) => {
     if (isShuffled) {
-      toast({
-        title: "Reordering disabled",
-        description: "Please disable shuffle mode to reorder the playlist.",
-      });
-      return;
+        toast({
+            title: "Reordering disabled",
+            description: "Please disable shuffle mode to reorder the playlist.",
+        });
+        return;
     }
 
     const newQueue = Array.from(queue);
@@ -649,27 +691,24 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     newQueue.splice(endIndex, 0, removed);
     
     setQueue(newQueue);
+
+    const currentId = currentTrack?.id;
+    const selectedId = selectedIndex !== null ? queue[selectedIndex]?.id : null;
+
+    if (currentId) {
+        const newCurrentIndex = newQueue.findIndex(t => t.id === currentId);
+        if (newCurrentIndex !== -1) {
+            setCurrentTrackIndex(newCurrentIndex);
+        }
+    }
     
-    // Update current playing index
-    if (currentTrackIndex !== null) {
-      const currentTrackId = queue[currentTrackIndex].id;
-      const newPlayingIndex = newQueue.findIndex(t => t.id === currentTrackId);
-      if (newPlayingIndex !== -1) {
-        setCurrentTrackIndex(newPlayingIndex);
-      }
+    if (selectedId) {
+        const newSelectedIndex = newQueue.findIndex(t => t.id === selectedId);
+        if (newSelectedIndex !== -1) {
+            setSelectedIndex(newSelectedIndex);
+        }
     }
-
-    // Update selected index
-    if(selectedIndex !== null) {
-      const selectedTrackId = queue[selectedIndex].id;
-      const newSelectedIndex = newQueue.findIndex(t => t.id === selectedTrackId);
-       if (newSelectedIndex !== -1) {
-        setSelectedIndex(newSelectedIndex);
-      }
-    }
-
-
-  }, [queue, isShuffled, toast, currentTrackIndex, selectedIndex]);
+  }, [queue, isShuffled, toast, currentTrack, selectedIndex]);
   
   const midiCommandActions = {
     togglePlayPause,
@@ -757,7 +796,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(selectedInput) selectedInput.onmidimessage = null;
       };
     }
-  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions]);
+  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions, setSettings]);
 
 
   if (!isHydrated) {
