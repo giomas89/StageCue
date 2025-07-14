@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, {
@@ -33,7 +34,7 @@ interface SoundCueContextType {
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
   playTrack: (index: number, andPlay?: boolean) => void;
   togglePlayPause: () => void;
-  playNext: () => void;
+  playNext: (fromError?: boolean) => void;
   playPrev: () => void;
   stopPlayback: () => void;
   clearQueue: () => void;
@@ -172,13 +173,14 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
              toast({
                 variant: "destructive",
                 title: "Playback Error",
-                description: `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`
+                description: `Could not play the audio file. It might be corrupt or in an unsupported format. Code: ${error.code}, Message: ${error.message}`
             });
         }
        
         setIsPlaying(false);
         isPlayingRef.current = false;
         playAfterLoadRef.current = false;
+        playNext(true); // Attempt to play next track on error
     }
 
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -228,7 +230,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
     _setQueue(newQueue);
 
-    if (wasEmpty && newQueue.length > 0) {
+    if (wasEmpty && newQueue.length > 0 && currentTrackIndex === null) {
       // Defer this call to ensure the state update has propagated and `currentQueue` is up-to-date
       setTimeout(() => playTrack(0, false), 0);
     }
@@ -336,10 +338,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const playNext = useCallback((isTrackEnd: boolean = false) => {
+  const playNext = useCallback((isTrackEnd: boolean = false, fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
     
-    if (repeatMode === 'one' && isTrackEnd) {
+    // If repeat one is on and the track ended naturally (not from an error), repeat it.
+    if (repeatMode === 'one' && isTrackEnd && !fromError) {
         if (audioRef.current) {
             audioRef.current.currentTime = 0;
             audioRef.current.play();
@@ -354,11 +357,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       if (repeatMode === 'all') {
         nextIndex = 0;
       } else {
-        setIsPlaying(false);
-        isPlayingRef.current = false;
+        // Stop playback if we are at the end and not repeating all.
         stopPlayback();
+        // If the queue has items, reset to the first track but don't play.
+        if (currentQueue.length > 0) {
+            playTrack(0, false);
+        }
         return;
       }
+    }
+    // If the next track is the same as the current one (e.g., single-item queue), stop to prevent infinite error loops.
+    if (nextIndex === currentTrackIndex) {
+        stopPlayback();
+        return;
     }
     playTrack(nextIndex);
   }, [currentTrackIndex, currentQueue.length, playTrack, repeatMode, stopPlayback]);
@@ -450,3 +461,5 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
 }
+
+    
