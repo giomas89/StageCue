@@ -335,7 +335,7 @@ function OscSettings() {
                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
-                    </CardHeader>
+                    </Header>
                     <CardContent>
                          <Alert>
                           <Info className="h-4 w-4" />
@@ -352,9 +352,36 @@ function OscSettings() {
 }
 
 function GeneralSettings() {
-    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput } = useSoundCue();
+    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput, volume } = useSoundCue();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [maxVolumeLevel, setMaxVolumeLevel] = useState(settings.audio.maxVolume.level);
+    
+    useEffect(() => {
+      // When max volume is disabled, its slider should follow the actual player volume.
+      if (!settings.audio.maxVolume.enabled) {
+        setMaxVolumeLevel(Math.round(volume * 100));
+      } else {
+        setMaxVolumeLevel(settings.audio.maxVolume.level);
+      }
+    }, [volume, settings.audio.maxVolume.enabled, settings.audio.maxVolume.level]);
+
+
+    const handleMaxVolEnabledChange = (checked: boolean) => {
+        setSettings(s => ({
+            ...s,
+            audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}
+        }));
+    };
+    
+    const handleMaxVolValueChange = (value: number) => {
+        setMaxVolumeLevel(value);
+        if (settings.audio.maxVolume.enabled) {
+            setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value}}}));
+        }
+    };
+
 
     const exportSettings = () => {
         const settingsJson = JSON.stringify(settings, null, 2);
@@ -408,7 +435,7 @@ function GeneralSettings() {
             </div>
 
             <div className="space-y-3">
-                <Label className="text-base font-semibold">Audio Effects</Label>
+                 <Label className="text-base font-semibold">Audio Effects</Label>
                  <p className="text-sm text-muted-foreground">Configure fade-in and fade-out effects.</p>
                 <div className="space-y-4">
                     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
@@ -472,13 +499,13 @@ function GeneralSettings() {
                         <Switch
                             id="maxvolume-enabled"
                             checked={settings.audio.maxVolume.enabled}
-                            onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}))}
+                            onCheckedChange={handleMaxVolEnabledChange}
                             aria-label="Toggle Maximum Volume"
                         />
-                        <Label htmlFor="maxvolume-level" className={cn("text-sm", !settings.audio.maxVolume.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="maxvolume-level" className="text-sm">
                             Maximum Volume
                         </Label>
-                        <div className={cn("relative w-24", !settings.audio.maxVolume.enabled && "opacity-50")}>
+                        <div className="relative w-24">
                             <Volume2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 id="maxvolume-level-input"
@@ -486,24 +513,19 @@ function GeneralSettings() {
                                 min="0"
                                 max="100"
                                 step="1"
-                                value={settings.audio.maxVolume.level}
-                                onChange={(e) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: Math.max(0, Math.min(100, Number(e.target.value))) }}}))}
-                                disabled={!settings.audio.maxVolume.enabled}
+                                value={maxVolumeLevel}
+                                onChange={(e) => handleMaxVolValueChange(Math.max(0, Math.min(100, Number(e.target.value))))}
                                 className="pl-8 text-center"
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                         </div>
                      </div>
-                    <div className={cn(
-                        "col-span-3",
-                        !settings.audio.maxVolume.enabled && "opacity-50"
-                        )}>
+                    <div className="col-span-3">
                         <Slider
-                            value={[settings.audio.maxVolume.level]}
-                            onValueChange={(value) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value[0]}}}))}
+                            value={[maxVolumeLevel]}
+                            onValueChange={(value) => handleMaxVolValueChange(value[0])}
                             max={100}
                             step={1}
-                            disabled={!settings.audio.maxVolume.enabled}
                         />
                     </div>
                 </div>

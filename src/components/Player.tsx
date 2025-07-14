@@ -15,7 +15,7 @@ import {
   FastForward,
   Rewind,
   Music,
-  StopCircle,
+  Square,
 } from 'lucide-react';
 import { useSoundCue } from '@/hooks/useSoundCue';
 import { Button } from './ui/button';
@@ -163,7 +163,7 @@ export default function Player() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={() => stopPlayback()} disabled={!currentTrack}>
-                      <StopCircle className="w-6 h-6" />
+                      <Square className="w-6 h-6" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Stop (S)</p></TooltipContent>

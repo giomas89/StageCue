@@ -136,13 +136,27 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setIsHydrated(true);
   }, []);
   
+  const setVolume = (vol: number) => {
+    let newVol = vol;
+    if (settings.audio.maxVolume.enabled) {
+      newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
+    }
+    setInternalVolume(newVol);
+    if (audioRef.current) {
+        stopFade();
+        audioRef.current.volume = newVol;
+    }
+    if(newVol > 0 && isMuted) setIsMuted(false);
+  }
+
   const setSettings = (setter: React.SetStateAction<Settings>) => {
     _setSettings(prevSettings => {
         const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
 
-        // Correct max volume logic
+        // Logic for when max volume is enabled/disabled or its value changes.
         if (newSettings.audio.maxVolume.enabled) {
             const maxVol = newSettings.audio.maxVolume.level / 100;
+            // If the current volume is higher than the new max, reduce it.
             if (volume > maxVol) {
                 setVolume(maxVol);
             }
@@ -244,23 +258,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       }
   }, [settings.audio.fadeIn, isMuted, volume]);
   
-  const stopPlayback = useCallback((fade = true) => {
-    const stopAction = () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-      setIsPlaying(false);
-    };
-
-    if (fade && isPlaying) {
-      fadeOutAnd(stopAction);
-    } else {
-      stopFade();
-      stopAction();
-    }
-  }, [fadeOutAnd, isPlaying]);
-  
   const playTrack = useCallback((index: number, andPlay = true) => {
     stopFade();
     const trackToPlay = currentQueue[index];
@@ -288,7 +285,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         }
     }
 }, [currentQueue, fadeIn, toast]);
-
 
  const playNext = useCallback((fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
@@ -368,10 +364,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
       setIsPlaying(false);
       
-      if (currentTrackIndex === currentQueue.length - 1 && repeatMode !== 'all') {
-        return;
+      // Stop infinite loop on error
+      if (!fromError) {
+          playNext(true);
       }
-      playNext(true);
     };
     
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -385,7 +381,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrackIndex, currentQueue.length]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrackIndex, currentQueue, playTrack]);
   
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
@@ -425,19 +421,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   }, [isShuffled, queue]); // eslint-disable-line react-hooks/exhaustive-deps
   
-  const setVolume = (vol: number) => {
-    let newVol = vol;
-    if (settings.audio.maxVolume.enabled) {
-      newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
-    }
-    setInternalVolume(newVol);
-    if (audioRef.current) {
-        stopFade();
-        audioRef.current.volume = newVol;
-    }
-    if(newVol > 0 && isMuted) setIsMuted(false);
-  }
-
   const setAudioOutput = useCallback(async (deviceId: string) => {
     if (audioRef.current && 'setSinkId' in HTMLAudioElement.prototype) {
       try {
@@ -459,6 +442,23 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         });
     }
   }, [toast, setSettings]);
+  
+  const stopPlayback = useCallback((fade = true) => {
+    const stopAction = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setIsPlaying(false);
+    };
+
+    if (fade && isPlaying) {
+      fadeOutAnd(stopAction);
+    } else {
+      stopFade();
+      stopAction();
+    }
+  }, [fadeOutAnd, isPlaying]);
 
   const toggleMute = () => {
       const newMuteState = !isMuted;
@@ -582,12 +582,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
     // Update currentTrackIndex if the currently playing track was moved
     if (currentTrackIndex !== null) {
-      if (currentTrackIndex === startIndex) {
-        setCurrentTrackIndex(endIndex);
-      } else if (startIndex < currentTrackIndex && endIndex >= currentTrackIndex) {
-        setCurrentTrackIndex(currentTrackIndex - 1);
-      } else if (startIndex > currentTrackIndex && endIndex <= currentTrackIndex) {
-        setCurrentTrackIndex(currentTrackIndex + 1);
+      const currentTrackId = currentTrack?.id;
+      const newIndex = result.findIndex(track => track.id === currentTrackId);
+      if (newIndex !== -1) {
+        setCurrentTrackIndex(newIndex);
       }
     }
   };
