@@ -47,7 +47,6 @@ const COMMAND_ORDER: MidiCommand[] = [
 function MidiSettings() {
   const { 
     settings, 
-    setSettings,
     midiInputs, 
     lastMidiMessage, 
     learningCommand, 
@@ -290,32 +289,38 @@ function OscSettings() {
 }
 
 function GeneralSettings() {
-    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput, setVolume, volume } = useSoundCue();
+    const { 
+      settings, 
+      setSettings, 
+      audioSettings, 
+      setAudioSettings,
+      audioOutputs, 
+      selectedAudioOutputId, 
+      setAudioOutput, 
+      setVolume, 
+      volume 
+    } = useSoundCue();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleMaxVolEnabledChange = (checked: boolean) => {
-        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}));
-        if (checked) {
-            const maxLevel = settings.audio.maxVolume.level / 100;
-            if (volume > maxLevel) {
-                setVolume(maxLevel);
+        setAudioSettings(s => {
+            const newSettings = {...s, maxVolume: {...s.maxVolume, enabled: checked }};
+            if(checked){
+                setVolume(newSettings.maxVolume.level / 100);
             }
-        }
+            return newSettings;
+        });
     };
     
     const handleMaxVolValueChange = (value: number[]) => {
         const newLevel = value[0];
-        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: newLevel}}}));
-        
-        const maxLevelAsDecimal = newLevel / 100;
-        if (volume > maxLevelAsDecimal) {
-            setVolume(maxLevelAsDecimal);
-        }
+        setAudioSettings(s => ({...s, maxVolume: {...s.maxVolume, level: newLevel}}));
+        setVolume(newLevel / 100);
     };
 
     const exportSettings = () => {
-        const settingsJson = JSON.stringify({settings, volume}, null, 2);
+        const settingsJson = JSON.stringify({settings, audioSettings, volume}, null, 2);
         const blob = new Blob([settingsJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -336,6 +341,7 @@ function GeneralSettings() {
                     if (typeof text !== 'string') throw new Error("File could not be read");
                     const imported = JSON.parse(text);
                     if(imported.settings) setSettings(imported.settings);
+                    if(imported.audioSettings) setAudioSettings(imported.audioSettings);
                     if(typeof imported.volume === 'number') setVolume(imported.volume);
                     toast({title: "Settings Imported"});
                 } catch (error) {
@@ -373,23 +379,23 @@ function GeneralSettings() {
                     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
                         <Switch
                             id="fadein-enabled"
-                            checked={settings.audio.fadeIn.enabled}
-                            onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, fadeIn: {...s.audio.fadeIn, enabled: checked }}}))}
+                            checked={audioSettings.fadeIn.enabled}
+                            onCheckedChange={(checked) => setAudioSettings(s => ({...s, fadeIn: {...s.fadeIn, enabled: checked }}))}
                             aria-label="Toggle Fade-in"
                         />
-                        <Label htmlFor="fadein-duration" className={cn("text-sm", !settings.audio.fadeIn.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="fadein-duration" className={cn("text-sm", !audioSettings.fadeIn.enabled && "text-muted-foreground/50")}>
                             Fade-in Duration
                         </Label>
-                        <div className={cn("relative w-24", !settings.audio.fadeIn.enabled && "opacity-50")}>
+                        <div className={cn("relative w-24", !audioSettings.fadeIn.enabled && "opacity-50")}>
                             <Timer className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 id="fadein-duration"
                                 type="number"
                                 min="0.1"
                                 step="0.1"
-                                value={settings.audio.fadeIn.duration}
-                                onChange={(e) => setSettings(s => ({...s, audio: {...s.audio, fadeIn: {...s.audio.fadeIn, duration: Math.max(0.1, Number(e.target.value)) }}}))}
-                                disabled={!settings.audio.fadeIn.enabled}
+                                value={audioSettings.fadeIn.duration}
+                                onChange={(e) => setAudioSettings(s => ({...s, fadeIn: {...s.fadeIn, duration: Math.max(0.1, Number(e.target.value)) }}))}
+                                disabled={!audioSettings.fadeIn.enabled}
                                 className="pl-8 text-center"
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">s</span>
@@ -398,23 +404,23 @@ function GeneralSettings() {
                      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
                         <Switch
                             id="fadeout-enabled"
-                            checked={settings.audio.fadeOut.enabled}
-                            onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, fadeOut: {...s.audio.fadeOut, enabled: checked }}}))}
+                            checked={audioSettings.fadeOut.enabled}
+                            onCheckedChange={(checked) => setAudioSettings(s => ({...s, fadeOut: {...s.fadeOut, enabled: checked }}))}
                             aria-label="Toggle Fade-out"
                         />
-                        <Label htmlFor="fadeout-duration" className={cn("text-sm", !settings.audio.fadeOut.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="fadeout-duration" className={cn("text-sm", !audioSettings.fadeOut.enabled && "text-muted-foreground/50")}>
                             Fade-out Duration
                         </Label>
-                        <div className={cn("relative w-24", !settings.audio.fadeOut.enabled && "opacity-50")}>
+                        <div className={cn("relative w-24", !audioSettings.fadeOut.enabled && "opacity-50")}>
                              <Timer className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 id="fadeout-duration"
                                 type="number"
                                 min="0.1"
                                 step="0.1"
-                                value={settings.audio.fadeOut.duration}
-                                onChange={(e) => setSettings(s => ({...s, audio: {...s.audio, fadeOut: {...s.audio.fadeOut, duration: Math.max(0.1, Number(e.target.value)) }}}))}
-                                disabled={!settings.audio.fadeOut.enabled}
+                                value={audioSettings.fadeOut.duration}
+                                onChange={(e) => setAudioSettings(s => ({...s, fadeOut: {...s.fadeOut, duration: Math.max(0.1, Number(e.target.value)) }}))}
+                                disabled={!audioSettings.fadeOut.enabled}
                                 className="pl-8 text-center"
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">s</span>
@@ -430,14 +436,14 @@ function GeneralSettings() {
                      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
                         <Switch
                             id="maxvolume-enabled"
-                            checked={settings.audio.maxVolume.enabled}
+                            checked={audioSettings.maxVolume.enabled}
                             onCheckedChange={handleMaxVolEnabledChange}
                             aria-label="Toggle Maximum Volume"
                         />
-                        <Label htmlFor="maxvolume-level" className={cn("text-sm", !settings.audio.maxVolume.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="maxvolume-level" className={cn("text-sm", !audioSettings.maxVolume.enabled && "text-muted-foreground/50")}>
                             Maximum Volume
                         </Label>
-                        <div className={cn("relative w-24", !settings.audio.maxVolume.enabled && "opacity-50")}>
+                        <div className={cn("relative w-24", !audioSettings.maxVolume.enabled && "opacity-50")}>
                             <Volume2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 id="maxvolume-level-input"
@@ -445,21 +451,21 @@ function GeneralSettings() {
                                 min="0"
                                 max="100"
                                 step="1"
-                                value={settings.audio.maxVolume.level}
+                                value={audioSettings.maxVolume.level}
                                 onChange={(e) => handleMaxVolValueChange([Math.max(0, Math.min(100, Number(e.target.value)))])}
-                                disabled={!settings.audio.maxVolume.enabled}
+                                disabled={!audioSettings.maxVolume.enabled}
                                 className="pl-8 text-center"
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                         </div>
                      </div>
-                    <div className={cn("col-span-3", !settings.audio.maxVolume.enabled && "opacity-50 pointer-events-none")}>
+                    <div className={cn("col-span-3", !audioSettings.maxVolume.enabled && "opacity-50 pointer-events-none")}>
                         <Slider
-                            value={[settings.audio.maxVolume.level]}
+                            value={[audioSettings.maxVolume.level]}
                             onValueChange={handleMaxVolValueChange}
                             max={100}
                             step={1}
-                            disabled={!settings.audio.maxVolume.enabled}
+                            disabled={!audioSettings.maxVolume.enabled}
                         />
                     </div>
                 </div>

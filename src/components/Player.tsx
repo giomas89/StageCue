@@ -61,7 +61,7 @@ export default function Player() {
     toggleShuffle,
     skipForward,
     skipBackward,
-    settings,
+    audioSettings,
   } = useSoundCue();
 
   const VolumeIcon = isMuted ? VolumeX : volume > 0.5 ? Volume2 : volume > 0 ? Volume1 : VolumeX;
@@ -71,12 +71,16 @@ export default function Player() {
   };
   
   const handleVolumeChange = (value: number[]) => {
-    setVolume(value[0] / 100);
+    let newVolume = value[0] / 100;
+    if (audioSettings.maxVolume.enabled) {
+      newVolume = Math.min(newVolume, audioSettings.maxVolume.level / 100);
+    }
+    setVolume(newVolume);
   };
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   
-  const maxVolume = settings.audio.maxVolume.enabled ? settings.audio.maxVolume.level : 100;
+  const maxVolume = audioSettings.maxVolume.enabled ? audioSettings.maxVolume.level : 100;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -205,3 +209,5 @@ export default function Player() {
     </div>
   );
 }
+
+    

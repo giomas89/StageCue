@@ -1,3 +1,4 @@
+
 export interface Track {
   id: string;
   name: string;
@@ -33,21 +34,22 @@ export interface Settings {
     ip: string;
     port: number;
   };
-  audio: {
-    outputId: string | null;
-    fadeIn: {
-      enabled: boolean;
-      duration: number;
-    },
-    fadeOut: {
-      enabled: boolean;
-      duration: number;
-    },
-    maxVolume: {
-      enabled: boolean;
-      level: number;
-    },
-  }
+}
+
+export interface AudioSettings {
+  outputId: string | null;
+  fadeIn: {
+    enabled: boolean;
+    duration: number;
+  },
+  fadeOut: {
+    enabled: boolean;
+    duration: number;
+  },
+  maxVolume: {
+    enabled: boolean;
+    level: number;
+  },
 }
 
     
