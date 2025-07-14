@@ -336,7 +336,7 @@ function OscSettings() {
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                     <CardContent>
                          <Alert>
                           <Info className="h-4 w-4" />
                           <AlertTitle>Info</AlertTitle>
@@ -352,7 +352,7 @@ function OscSettings() {
 }
 
 function GeneralSettings() {
-    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput, volume, setVolume } = useSoundCue();
+    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput } = useSoundCue();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -363,24 +363,12 @@ function GeneralSettings() {
     }, [settings.audio.maxVolume.level]);
 
     const handleMaxVolEnabledChange = (checked: boolean) => {
-        setSettings(s => {
-            const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}};
-            if (checked && volume > newSettings.audio.maxVolume.level / 100) {
-                setVolume(newSettings.audio.maxVolume.level / 100);
-            }
-            return newSettings;
-        });
+        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}));
     };
     
     const handleMaxVolValueChange = (value: number) => {
         setMaxVolumeLevel(value);
-        setSettings(s => {
-            const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value}}};
-            if (newSettings.audio.maxVolume.enabled && volume > value / 100) {
-                setVolume(value / 100);
-            }
-            return newSettings;
-        });
+        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value}}}));
     };
 
 
@@ -503,10 +491,10 @@ function GeneralSettings() {
                             onCheckedChange={handleMaxVolEnabledChange}
                             aria-label="Toggle Maximum Volume"
                         />
-                        <Label htmlFor="maxvolume-level" className="text-sm">
+                        <Label htmlFor="maxvolume-level" className={cn("text-sm", !settings.audio.maxVolume.enabled && "text-muted-foreground/50")}>
                             Maximum Volume
                         </Label>
-                        <div className="relative w-24">
+                        <div className={cn("relative w-24", !settings.audio.maxVolume.enabled && "opacity-50")}>
                             <Volume2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 id="maxvolume-level-input"
@@ -516,17 +504,19 @@ function GeneralSettings() {
                                 step="1"
                                 value={maxVolumeLevel}
                                 onChange={(e) => handleMaxVolValueChange(Math.max(0, Math.min(100, Number(e.target.value))))}
+                                disabled={!settings.audio.maxVolume.enabled}
                                 className="pl-8 text-center"
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                         </div>
                      </div>
-                    <div className="col-span-3">
+                    <div className={cn("col-span-3", !settings.audio.maxVolume.enabled && "opacity-50 pointer-events-none")}>
                         <Slider
                             value={[maxVolumeLevel]}
                             onValueChange={(value) => handleMaxVolValueChange(value[0])}
                             max={100}
                             step={1}
+                            disabled={!settings.audio.maxVolume.enabled}
                         />
                     </div>
                 </div>

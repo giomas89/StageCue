@@ -159,23 +159,21 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }
 
   const setSettings = (setter: React.SetStateAction<Settings>) => {
+    let newSettings: Settings;
     _setSettings(prevSettings => {
-        const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
-
-        // Logic for when max volume is enabled/disabled or its value changes.
-        if (newSettings.audio.maxVolume.enabled) {
-            const maxVol = newSettings.audio.maxVolume.level / 100;
-            // If the current volume is higher than the new max, reduce it.
-            if (volume > maxVol) {
-                setVolume(maxVol);
-            }
-        }
+        newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
         
         try {
             localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
             setSelectedAudioOutputId(newSettings.audio.outputId);
         } catch (error) {
              console.error("Failed to save settings to localStorage", error);
+        }
+
+        // Post-update logic that depends on the new settings and current volume
+        const maxVol = newSettings.audio.maxVolume.level / 100;
+        if (newSettings.audio.maxVolume.enabled && volume > maxVol) {
+            setVolume(maxVol);
         }
         
         return newSettings;
@@ -380,11 +378,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       });
 
       setIsPlaying(false);
-      
-      // Stop infinite loop on error
-      if (!fromError) {
-          playNext(true);
-      }
+      playNext(true);
     };
     
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -398,7 +392,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrackIndex, currentQueue, playTrack]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn]);
   
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
@@ -436,7 +430,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         }
     }
 
-  }, [isShuffled, queue]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isShuffled, queue, playTrack, stopPlayback]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const setAudioOutput = useCallback(async (deviceId: string) => {
     if (audioRef.current && 'setSinkId' in HTMLAudioElement.prototype) {

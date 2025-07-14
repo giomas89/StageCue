@@ -198,6 +198,7 @@ export default function Player() {
               step={1}
               onValueChange={handleVolumeChange}
               className="w-full"
+              disabled={!currentTrack}
             />
           </div>
       </div>
