@@ -52,9 +52,9 @@ const defaultSettings: Settings = {
       inputId: null,
       mappings: {
         togglePlayPause: 60, // C4
+        stopPlayback: 57, // A3
         playNext: 62, // D4
         playPrev: 59, // B3
-        stopPlayback: 57, // A3
         skipForward: 64, // E4
         skipBackward: 55, // G3
       },
@@ -123,12 +123,12 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             console.warn("Media devices API not available.");
             return;
         }
-        await navigator.mediaDevices.getUserMedia({ audio: true }); // Request permission
         const devices = await navigator.mediaDevices.enumerateDevices();
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioOutputs(outputs);
     } catch (err) {
         console.error("Error enumerating audio devices:", err);
+        // This might happen if permission is denied, but we don't force it anymore.
     }
   }, []);
 
@@ -180,13 +180,12 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const currentQueue = isShuffled ? shuffledQueue : queue;
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
 
-  // Auto-select first track when queue is populated
+  // Auto-select first track when queue is populated and no track is playing
   useEffect(() => {
     if (queue.length > 0 && currentTrackIndex === null) {
-      const newIndex = isShuffled ? currentQueue.findIndex(t => t.id === queue[0].id) : 0;
-      setCurrentTrackIndex(newIndex);
+      setCurrentTrackIndex(0);
     }
-  }, [queue, currentTrackIndex, currentQueue, isShuffled]);
+  }, [queue, currentTrackIndex]);
 
   useEffect(() => {
     if (currentTrack && audioRef.current) {
