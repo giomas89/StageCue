@@ -28,7 +28,7 @@ const formatDuration = (seconds: number | undefined) => {
 };
 
 export default function Queue() {
-  const { queue, setQueue, currentTrackIndex, playTrack, clearQueue } = useSoundCue();
+  const { queue, setQueue, currentTrackIndex, playTrack, clearQueue, playNext } = useSoundCue();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [playlistName, setPlaylistName] = useState("");
@@ -37,9 +37,9 @@ export default function Queue() {
     const keys = Object.keys(localStorage).filter(k => k.startsWith('playlist_'));
     return keys.map(k => k.replace('playlist_', ''));
   });
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+  const addFilesToQueue = (files: FileList) => {
     if (files) {
       const newTracks: Track[] = Array.from(files)
         .filter(file => file.type.startsWith('audio/'))
@@ -55,7 +55,16 @@ export default function Queue() {
         return;
       }
       
-      setQueue(prevQueue => [...prevQueue, ...newTracks]);
+      setQueue(prevQueue => {
+          const newQueue = [...prevQueue, ...newTracks];
+          if(prevQueue.length === 0 && newQueue.length > 0) {
+              // If queue was empty, set the first track.
+              // We need a small delay to let the state update.
+              setTimeout(() => playTrack(0, false), 0);
+          }
+          return newQueue;
+      });
+
 
       toast({ title: "Tracks added", description: `${newTracks.length} tracks added to the queue.` });
 
@@ -71,6 +80,35 @@ export default function Queue() {
         };
       });
     }
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    addFilesToQueue(event.target.files!);
+    // Reset file input to allow uploading the same file again
+    if(fileInputRef.current) {
+        fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    addFilesToQueue(e.dataTransfer.files);
   };
 
   const savePlaylist = () => {
@@ -87,9 +125,6 @@ export default function Queue() {
 
   const loadPlaylist = (name: string) => {
     toast({ title: "Feature not implemented", description: "Loading playlists with audio files is not yet supported in this demo." });
-    // This is a placeholder. Full implementation requires storing and retrieving Blob/File objects which is complex with localStorage.
-    // A real-world app would use IndexedDB for this.
-    // For now, it shows the saved playlist names.
   };
 
   const deletePlaylist = (name: string) => {
@@ -99,7 +134,18 @@ export default function Queue() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-card">
+    <div 
+      className="h-full flex flex-col bg-card relative"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 bg-primary/20 border-2 border-dashed border-primary flex items-center justify-center z-10 pointer-events-none">
+          <p className="text-primary font-bold text-lg">Drop audio files here</p>
+        </div>
+      )}
       <div className="p-4 border-b flex justify-between items-center">
         <h2 className="text-lg font-semibold flex items-center gap-2">
             <ListMusic className="w-5 h-5"/>
@@ -196,7 +242,7 @@ export default function Queue() {
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center">
             <ListMusic className="w-16 h-16 mb-4" />
             <h3 className="text-lg font-semibold">Your queue is empty</h3>
-            <p className="text-sm">Click "Add" to start building your queue.</p>
+            <p className="text-sm">Click "Add" or drag & drop files to start.</p>
           </div>
         )}
       </ScrollArea>

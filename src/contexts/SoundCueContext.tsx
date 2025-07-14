@@ -31,7 +31,7 @@ interface SoundCueContextType {
   toggleShuffle: () => void;
   settings: Settings;
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
-  playTrack: (index: number) => void;
+  playTrack: (index: number, andPlay?: boolean) => void;
   togglePlayPause: () => void;
   playNext: () => void;
   playPrev: () => void;
@@ -72,13 +72,14 @@ const loadSettings = (): Settings => {
         if (savedSettings) {
             // Merge saved settings with defaults to ensure all keys are present
             const parsed = JSON.parse(savedSettings);
-            return {
+            const mergedSettings = {
                 ...defaultSettings,
                 ...parsed,
-                midi: { ...defaultSettings.midi, ...parsed.midi },
+                midi: { ...defaultSettings.midi, ...parsed.midi, mappings: {...defaultSettings.midi.mappings, ...parsed.midi?.mappings} },
                 osc: { ...defaultSettings.osc, ...parsed.osc },
                 audio: { ...defaultSettings.audio, ...parsed.audio },
             };
+            return mergedSettings;
         }
     } catch (error) {
         console.error("Failed to load settings from localStorage", error);
@@ -128,7 +129,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         setAudioOutputs(outputs);
     } catch (err) {
         console.error("Error enumerating audio devices:", err);
-        // This might happen if permission is denied, but we don't force it anymore.
     }
   }, []);
 
@@ -180,13 +180,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const currentQueue = isShuffled ? shuffledQueue : queue;
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
 
-  // Auto-select first track when queue is populated and no track is playing
-  useEffect(() => {
-    if (queue.length > 0 && currentTrackIndex === null) {
-      setCurrentTrackIndex(0);
-    }
-  }, [queue, currentTrackIndex]);
-
   useEffect(() => {
     if (currentTrack && audioRef.current) {
         const wasPlaying = isPlaying;
@@ -197,8 +190,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if (wasPlaying) {
             audioRef.current.play().catch(e => console.error("Playback failed after track change", e));
         }
+    } else if (!currentTrack && audioRef.current && isPlaying) {
+        setIsPlaying(false);
     }
-  }, [currentTrack]);
+  }, [currentTrack, isPlaying]);
 
 
   useEffect(() => {
@@ -220,7 +215,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           setCurrentTrackIndex(newIndex);
       }
     }
-  }, [isShuffled, queue]);
+  }, [isShuffled, queue, currentTrack]);
   
   const setVolume = (vol: number) => {
     if (audioRef.current) {
@@ -260,15 +255,20 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       })
   }
 
-  const playTrack = useCallback((index: number) => {
+  const playTrack = useCallback((index: number, andPlay = true) => {
     if (index >= 0 && index < currentQueue.length) {
       setCurrentTrackIndex(index);
-      setIsPlaying(true);
+      setIsPlaying(andPlay);
     }
   }, [currentQueue.length]);
 
   const togglePlayPause = useCallback(() => {
-    if (!currentTrack) return;
+    if (!currentTrack) {
+        if (currentQueue.length > 0) {
+            playTrack(0, true);
+        }
+        return;
+    };
     if (isPlaying) {
       audioRef.current?.pause();
       setIsPlaying(false);
@@ -278,7 +278,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           setIsPlaying(false);
       });
     }
-  }, [isPlaying, currentTrack]);
+  }, [isPlaying, currentTrack, currentQueue, playTrack]);
 
   const stopPlayback = useCallback(() => {
     if (audioRef.current) {
@@ -329,9 +329,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length]);
 
   const clearQueue = () => {
-    if (isPlaying) {
-        stopPlayback();
-    }
+    stopPlayback();
     setQueue([]);
     setShuffledQueue([]);
     setCurrentTrackIndex(null);
