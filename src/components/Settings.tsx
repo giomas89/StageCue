@@ -233,10 +233,11 @@ function MidiSettings() {
 }
 
 function OscSettings() {
-    const { toast } = useToast();
+    const { settings, setSettings } = useSoundCue();
     const [oscMessages, setOscMessages] = useState<{timestamp: string, address: string, args: string}[]>([]);
     
     useEffect(() => {
+        // This is a mock interval for demonstration purposes.
         const mockInterval = setInterval(() => {
              const commands = [
                 { address: "/soundcue/play", args: ""},
@@ -283,13 +284,25 @@ function OscSettings() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="osc-ip">OSC Bridge IP Address</Label>
-                            <Input id="osc-ip" placeholder="e.g., 127.0.0.1" defaultValue="127.0.0.1" />
+                            <Input 
+                                id="osc-ip"
+                                value={settings.osc.ip}
+                                onChange={(e) => setSettings(s => ({...s, osc: {...s.osc, ip: e.target.value}}))}
+                                placeholder="e.g., 127.0.0.1" 
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="osc-port">OSC Bridge Port</Label>
-                            <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
+                            <Input 
+                                id="osc-port"
+                                type="number" 
+                                value={settings.osc.port}
+                                onChange={(e) => setSettings(s => ({...s, osc: {...s.osc, port: Number(e.target.value)}}))}
+                                placeholder="e.g., 9000" 
+                            />
                         </div>
-                        <Button onClick={() => toast({title: "Info", description: "This functionality requires a separate OSC bridge application."})}>Connect</Button>
+                        <Button disabled>Connect</Button>
+                        <p className="text-xs text-muted-foreground">Connection functionality requires a separate OSC bridge application and is not implemented in this demo.</p>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -325,7 +338,7 @@ function OscSettings() {
                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
-                        <CardDescription>Displays incoming OSC messages from the bridge.</CardDescription>
+                        <CardDescription>Displays incoming OSC messages (demonstration only).</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-48 w-full rounded-md border">

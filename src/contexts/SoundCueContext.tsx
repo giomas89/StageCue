@@ -63,6 +63,30 @@ const defaultSettings: Settings = {
     audio: { outputId: 'default' }
 };
 
+const loadSettings = (): Settings => {
+    if (typeof window === 'undefined') {
+        return defaultSettings;
+    }
+    try {
+        const savedSettings = localStorage.getItem('soundcue-settings');
+        if (savedSettings) {
+            // Merge saved settings with defaults to ensure all keys are present
+            const parsed = JSON.parse(savedSettings);
+            return {
+                ...defaultSettings,
+                ...parsed,
+                midi: { ...defaultSettings.midi, ...parsed.midi },
+                osc: { ...defaultSettings.osc, ...parsed.osc },
+                audio: { ...defaultSettings.audio, ...parsed.audio },
+            };
+        }
+    } catch (error) {
+        console.error("Failed to load settings from localStorage", error);
+    }
+    return defaultSettings;
+};
+
+
 export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<Track[]>([]);
   const [shuffledQueue, setShuffledQueue] = useState<Track[]>([]);
@@ -74,14 +98,24 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [settings, setSettings] = useState<Settings>(loadSettings);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>('default');
+  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>(settings.audio.outputId);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const playNextRef = useRef((_isTrackEnd: boolean) => {});
+
+  // Save settings to localStorage whenever they change
+  useEffect(() => {
+    try {
+        const settingsJson = JSON.stringify(settings);
+        localStorage.setItem('soundcue-settings', settingsJson);
+    } catch (error) {
+        console.error("Failed to save settings to localStorage", error);
+    }
+  }, [settings]);
 
   const getAudioOutputs = useCallback(async () => {
     try {
@@ -95,14 +129,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         setAudioOutputs(outputs);
     } catch (err) {
         console.error("Error enumerating audio devices:", err);
-        toast({ variant: "destructive", title: "Audio Permission", description: "Could not list audio devices. Please grant permission." });
+        // toast({ variant: "destructive", title: "Audio Permission", description: "Could not list audio devices. Please grant permission." });
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     audioRef.current = new Audio();
     getAudioOutputs();
     
+    // Set initial audio output from loaded settings
+    if (settings.audio.outputId) {
+        setAudioOutput(settings.audio.outputId);
+    }
+
     const audio = audioRef.current;
     
     const handleTimeUpdate = () => {
@@ -137,7 +176,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs]);
+  }, [toast, getAudioOutputs, settings.audio.outputId]);
   
   const currentQueue = isShuffled ? shuffledQueue : queue;
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
@@ -151,14 +190,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [queue, currentTrackIndex, currentQueue, isShuffled]);
 
   useEffect(() => {
-    if (currentTrack && audioRef.current && audioRef.current.src !== currentTrack.url) {
-      audioRef.current.src = currentTrack.url;
-      audioRef.current.load();
-      if (isPlaying) {
-        audioRef.current.play().catch(e => console.error("Playback failed after track change", e));
-      }
+    if (currentTrack && audioRef.current) {
+        const wasPlaying = isPlaying;
+        // Check if the src is different before setting it to avoid re-loading the same track
+        if (audioRef.current.src !== currentTrack.url) {
+            audioRef.current.src = currentTrack.url;
+            audioRef.current.load();
+        }
+        if (wasPlaying) {
+            audioRef.current.play().catch(e => console.error("Playback failed after track change", e));
+        }
     }
-  }, [currentTrack, isPlaying]);
+  }, [currentTrack]);
 
 
   useEffect(() => {
@@ -204,7 +247,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           description: "Could not set audio output device.",
         });
       }
-    } else {
+    } else if (deviceId !== 'default') { // Don't show toast for the default initial setting
         toast({
           variant: "destructive",
           title: "Feature Not Supported",
@@ -223,7 +266,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const playTrack = useCallback((index: number) => {
     if (index >= 0 && index < currentQueue.length) {
       setCurrentTrackIndex(index);
-      setIsPlaying(true); // Set playing to true immediately to trigger useEffect
+      setIsPlaying(true);
     }
   }, [currentQueue.length]);
 
@@ -233,7 +276,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audioRef.current?.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current?.play().then(() => setIsPlaying(true)).catch(e => console.error("Playback failed", e));
+      audioRef.current?.play().then(() => setIsPlaying(true)).catch(e => {
+          console.error("Playback failed", e);
+          setIsPlaying(false);
+      });
     }
   }, [isPlaying, currentTrack]);
 
