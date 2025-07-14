@@ -219,9 +219,7 @@ export default function Queue() {
                                 )}
                             >
                                 <div className="flex items-center gap-3">
-                                    <div {...provided.dragHandleProps} className="cursor-grab">
-                                        <GripVertical className="w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100" />
-                                    </div>
+                                    <GripVertical {...provided.dragHandleProps} className="w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100 cursor-grab" />
                                     <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
                                     <span className="font-medium cursor-default">{track.name}</span>
                                 </div>
