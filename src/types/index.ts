@@ -18,7 +18,7 @@ export type MidiCommand =
 export interface Settings {
   midi: {
     inputId: string | null;
-    mappings: Record<MidiCommand, number | null>;
+    mappings: Record<MidiCommand, number | null | undefined>;
   };
   osc: {
     ip: string;

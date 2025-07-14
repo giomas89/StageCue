@@ -37,13 +37,26 @@ export default function Queue() {
       const newTracks: Track[] = Array.from(files)
         .filter(file => file.type.startsWith('audio/'))
         .map(file => ({
-          id: `${file.name}-${file.lastModified}`,
+          id: `${file.name}-${file.size}-${file.lastModified}`,
           name: file.name.replace(/\.[^/.]+$/, ""),
           file,
           url: URL.createObjectURL(file),
         }));
-      setQueue(prev => [...prev, ...newTracks]);
-      toast({ title: "Tracks added", description: `${newTracks.length} tracks added to the queue.` });
+
+      setQueue(prevQueue => {
+        const existingIds = new Set(prevQueue.map(t => t.id));
+        const uniqueNewTracks = newTracks.filter(t => !existingIds.has(t.id));
+
+        if (uniqueNewTracks.length < newTracks.length) {
+            toast({ variant: "default", title: "Duplicate tracks skipped", description: "Some tracks were already in the queue." });
+        }
+
+        if (uniqueNewTracks.length > 0) {
+             toast({ title: "Tracks added", description: `${uniqueNewTracks.length} tracks added to the queue.` });
+        }
+        
+        return [...prevQueue, ...uniqueNewTracks];
+      });
     }
   };
 
@@ -88,7 +101,7 @@ export default function Queue() {
             ref={fileInputRef}
             onChange={handleFileChange}
             multiple
-            accept="audio/mpeg, audio/wav"
+            accept="audio/mpeg, audio/wav, audio/mp3, audio/ogg"
             className="hidden"
           />
           <Dialog>

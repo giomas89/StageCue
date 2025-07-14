@@ -70,10 +70,11 @@ function MidiSettings() {
             }
         } catch(e) {
             console.error("Could not access your MIDI devices.", e);
+            toast({ variant: "destructive", title: "MIDI Error", description: "Could not access MIDI devices." });
         }
     }
     requestMidi();
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     midiInputs.forEach(input => {
@@ -94,7 +95,6 @@ function MidiSettings() {
         const newMessage: MidiMessage = { command, note, velocity, timestamp: event.timeStamp, type };
         setLastMessages(prev => [newMessage, ...prev.slice(0, 49)]);
         
-        // Note On event
         if (type === 'Note On' && velocity > 0) {
             if (learningCommand) {
                 setSettings(s => ({
@@ -107,7 +107,6 @@ function MidiSettings() {
                 toast({ title: "MIDI Learned", description: `Assigned Note ${note} to ${COMMAND_LABELS[learningCommand]}`});
                 setLearningCommand(null);
             } else {
-                 // Trigger command based on mapping
                 const commandToTrigger = (Object.keys(settings.midi.mappings) as MidiCommand[]).find(
                     cmd => settings.midi.mappings[cmd] === note
                 );
@@ -115,10 +114,6 @@ function MidiSettings() {
                 if(commandToTrigger) {
                     const action = midiCommandActions[commandToTrigger];
                     if (action) action();
-                    else if (commandToTrigger.startsWith('playTrack_')) {
-                        const index = parseInt(commandToTrigger.split('_')[1], 10);
-                        playTrack(index);
-                    }
                 }
             }
         }
@@ -133,7 +128,7 @@ function MidiSettings() {
   }, [selectedInputId, midiInputs, settings.midi.mappings, setSettings, learningCommand, toast, midiCommandActions, playTrack]);
   
   const formatMidiNote = (note: number | null) => {
-    if (note === null) return 'N/A';
+    if (note === null || note === undefined) return 'N/A';
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const octave = Math.floor(note / 12) - 1;
     const name = noteNames[note % 12];
@@ -141,88 +136,99 @@ function MidiSettings() {
   }
 
   return (
-    <div className="space-y-6">
-        <Card>
-            <CardHeader>
-                <CardTitle>MIDI Configuration</CardTitle>
-                <CardDescription>Select a MIDI device to control playback.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <Select onValueChange={handleSelectMidiInput} value={selectedInputId || "no-devices"}>
-                <SelectTrigger>
-                    <SelectValue placeholder="Select a MIDI input" />
-                </SelectTrigger>
-                <SelectContent>
-                    {midiInputs.length > 0 ? (
-                    midiInputs.map(input => (
-                        <SelectItem key={input.id} value={input.id}>
-                        {input.name}
-                        </SelectItem>
-                    ))
-                    ) : (
-                    <SelectItem value="no-devices" disabled>No MIDI devices found</SelectItem>
-                    )}
-                </SelectContent>
-                </Select>
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader>
-                <CardTitle>MIDI Mapping</CardTitle>
-                <CardDescription>Assign MIDI notes to player commands. Click "Learn" then press a key on your MIDI device.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Command</TableHead>
-                            <TableHead>Assigned Note</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {(Object.keys(COMMAND_LABELS) as MidiCommand[]).map(cmd => (
-                           <TableRow key={cmd}>
-                             <TableCell className="font-medium">{COMMAND_LABELS[cmd]}</TableCell>
-                             <TableCell><code>{formatMidiNote(settings.midi.mappings[cmd])}</code></TableCell>
-                             <TableCell className="text-right">
-                                <Button 
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setLearningCommand(cmd)}
-                                    disabled={!selectedInputId}
-                                    className={cn(learningCommand === cmd && "bg-destructive text-destructive-foreground")}
-                                >
-                                    {learningCommand === cmd ? 'Listening...' : 'Learn'}
-                                </Button>
-                             </TableCell>
-                           </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-         <Card>
-            <CardHeader>
-                <CardTitle>MIDI Monitor</CardTitle>
-                <CardDescription>Displays the last 50 MIDI messages received.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ScrollArea className="h-48 w-full rounded-md border">
-                    <div className="p-4 font-mono text-xs">
-                    {lastMessages.length > 0 ? (
-                        lastMessages.map((msg, index) => (
-                            <p key={`${msg.timestamp}-${index}`}>
-                                <span className="text-muted-foreground">[{msg.type}]</span>{' '}
-                                Cmd: {msg.command}, Note: {msg.note}, Vel: {msg.velocity}
-                            </p>
+    <Tabs defaultValue="config" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="config">Configuration</TabsTrigger>
+            <TabsTrigger value="mapping">Mapping</TabsTrigger>
+            <TabsTrigger value="monitor">Monitor</TabsTrigger>
+        </TabsList>
+        <TabsContent value="config" className="mt-4">
+             <Card>
+                <CardHeader>
+                    <CardTitle>MIDI Input Device</CardTitle>
+                    <CardDescription>Select a MIDI device to control playback.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Select onValueChange={handleSelectMidiInput} value={selectedInputId || "no-devices"}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select a MIDI input" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {midiInputs.length > 0 ? (
+                        midiInputs.map(input => (
+                            <SelectItem key={input.id} value={input.id}>
+                            {input.name}
+                            </SelectItem>
                         ))
-                    ) : <p className="text-muted-foreground">Waiting for messages...</p>}
-                    </div>
-                </ScrollArea>
-            </CardContent>
-        </Card>
-    </div>
+                        ) : (
+                        <SelectItem value="no-devices" disabled>No MIDI devices found</SelectItem>
+                        )}
+                    </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="mapping" className="mt-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle>MIDI Note Mapping</CardTitle>
+                    <CardDescription>Assign MIDI notes to player commands. Click "Learn" then press a key on your MIDI device.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Command</TableHead>
+                                <TableHead>Assigned Note</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {(Object.keys(COMMAND_LABELS) as MidiCommand[]).map(cmd => (
+                            <TableRow key={cmd}>
+                                <TableCell className="font-medium">{COMMAND_LABELS[cmd]}</TableCell>
+                                <TableCell><code>{formatMidiNote(settings.midi.mappings[cmd])}</code></TableCell>
+                                <TableCell className="text-right">
+                                    <Button 
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setLearningCommand(cmd)}
+                                        disabled={!selectedInputId}
+                                        className={cn(learningCommand === cmd && "bg-destructive text-destructive-foreground")}
+                                    >
+                                        {learningCommand === cmd ? 'Listening...' : 'Learn'}
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="monitor" className="mt-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle>MIDI Monitor</CardTitle>
+                    <CardDescription>Displays the last 50 MIDI messages received from the selected device.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ScrollArea className="h-48 w-full rounded-md border">
+                        <div className="p-4 font-mono text-xs">
+                        {lastMessages.length > 0 ? (
+                            lastMessages.map((msg, index) => (
+                                <p key={`${msg.timestamp}-${index}`}>
+                                    <span className="text-muted-foreground">[{msg.type}]</span>{' '}
+                                    Cmd: {msg.command}, Note: {msg.note}, Vel: {msg.velocity}
+                                </p>
+                            ))
+                        ) : <p className="text-muted-foreground">Waiting for messages...</p>}
+                        </div>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+        </TabsContent>
+    </Tabs>
   );
 }
 
@@ -230,13 +236,14 @@ function OscSettings() {
     const { toast } = useToast();
     const [oscMessages, setOscMessages] = useState<{timestamp: string, address: string, args: string}[]>([]);
     
-    // This is a mock. Real OSC would require a WebSocket bridge.
     useEffect(() => {
         const mockInterval = setInterval(() => {
              const commands = [
                 { address: "/soundcue/play", args: ""},
                 { address: "/soundcue/stop", args: ""},
                 { address: "/soundcue/play", args: "3"},
+                { address: "/soundcue/next", args: ""},
+                { address: "/soundcue/prev", args: ""},
              ];
              const randomCommand = commands[Math.floor(Math.random()*commands.length)];
              const newMessage = {
@@ -263,71 +270,82 @@ function OscSettings() {
     ];
 
     return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>OSC Configuration</CardTitle>
-                    <CardDescription>Configure the connection to your OSC bridge application.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="osc-ip">OSC Bridge IP Address</Label>
-                        <Input id="osc-ip" placeholder="e.g., 127.0.0.1" defaultValue="127.0.0.1" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="osc-port">OSC Bridge Port</Label>
-                        <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
-                    </div>
-                    <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Available OSC Commands (Mapping)</CardTitle>
-                    <CardDescription>
-                        Here are the OSC addresses to control the player.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Command</TableHead>
-                                <TableHead>Address</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {oscCommands.map(cmd => (
-                                <TableRow key={cmd.address}>
-                                    <TableCell className="font-medium">{cmd.command}</TableCell>
-                                    <TableCell><code>{cmd.address}</code></TableCell>
+        <Tabs defaultValue="mapping" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="mapping">Mapping</TabsTrigger>
+                <TabsTrigger value="config">Configuration</TabsTrigger>
+                <TabsTrigger value="monitor">Monitor</TabsTrigger>
+            </TabsList>
+            <TabsContent value="mapping" className="mt-4">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Available OSC Commands</CardTitle>
+                        <CardDescription>
+                            Here are the OSC addresses to control the player.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Command</TableHead>
+                                    <TableHead>Address</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader>
-                    <CardTitle>OSC Monitor</CardTitle>
-                    <CardDescription>Displays incoming OSC messages from the bridge.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ScrollArea className="h-48 w-full rounded-md border">
-                        <div className="p-4 font-mono text-xs">
-                        {oscMessages.length > 0 ? (
-                            oscMessages.map((msg, index) => (
-                                <p key={`${msg.timestamp}-${index}`}>
-                                    <span className="text-muted-foreground">[{msg.timestamp}]</span>{' '}
-                                    {msg.address} <span className="text-primary">{msg.args}</span>
-                                </p>
-                            ))
-                        ) : <p className="text-muted-foreground">Waiting for messages...</p>}
+                            </TableHeader>
+                            <TableBody>
+                                {oscCommands.map(cmd => (
+                                    <TableRow key={cmd.address}>
+                                        <TableCell className="font-medium">{cmd.command}</TableCell>
+                                        <TableCell><code>{cmd.address}</code></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="config" className="mt-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>OSC Configuration</CardTitle>
+                        <CardDescription>Configure the connection to your OSC bridge application (UI is for demonstration).</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="osc-ip">OSC Bridge IP Address</Label>
+                            <Input id="osc-ip" placeholder="e.g., 127.0.0.1" defaultValue="127.0.0.1" />
                         </div>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
-        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="osc-port">OSC Bridge Port</Label>
+                            <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
+                        </div>
+                        <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="monitor" className="mt-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>OSC Monitor</CardTitle>
+                        <CardDescription>Displays incoming OSC messages from the bridge (mock data).</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-48 w-full rounded-md border">
+                            <div className="p-4 font-mono text-xs">
+                            {oscMessages.length > 0 ? (
+                                oscMessages.map((msg, index) => (
+                                    <p key={`${msg.timestamp}-${index}`}>
+                                        <span className="text-muted-foreground">[{msg.timestamp}]</span>{' '}
+                                        {msg.address} <span className="text-primary">{msg.args}</span>
+                                    </p>
+                                ))
+                            ) : <p className="text-muted-foreground">Waiting for messages...</p>}
+                            </div>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
     );
 }
 
