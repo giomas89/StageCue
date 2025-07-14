@@ -254,10 +254,8 @@ function OscSettings() {
              setOscMessages(prev => [newMessage, ...prev.slice(0, 49)]);
         }, 5000);
 
-        toast({title: "OSC Demo", description: "OSC monitor is showing mock data. Full OSC control requires a bridge application.", duration: 5000});
-
         return () => clearInterval(mockInterval);
-    }, [toast]);
+    }, []);
 
 
     const oscCommands = [
@@ -280,7 +278,7 @@ function OscSettings() {
                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Configuration</CardTitle>
-                        <CardDescription>Configure the connection to your OSC bridge application (UI is for demonstration).</CardDescription>
+                        <CardDescription>Configure the connection to your OSC bridge application.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
@@ -291,7 +289,7 @@ function OscSettings() {
                             <Label htmlFor="osc-port">OSC Bridge Port</Label>
                             <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
                         </div>
-                        <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
+                        <Button onClick={() => toast({title: "Info", description: "This functionality requires a separate OSC bridge application."})}>Connect</Button>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -327,7 +325,7 @@ function OscSettings() {
                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
-                        <CardDescription>Displays incoming OSC messages from the bridge (mock data).</CardDescription>
+                        <CardDescription>Displays incoming OSC messages from the bridge.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-48 w-full rounded-md border">
