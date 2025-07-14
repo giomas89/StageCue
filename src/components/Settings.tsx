@@ -44,6 +44,10 @@ function MidiSettings() {
   }, []);
 
   useEffect(() => {
+    midiInputs.forEach(input => {
+      input.onmidimessage = null;
+    });
+
     const selectedInput = midiInputs.find(input => input.id === selectedInputId);
 
     if (selectedInput) {
@@ -98,7 +102,7 @@ function MidiSettings() {
                 </SelectItem>
               ))
             ) : (
-              <SelectItem value="none" disabled>No MIDI devices found</SelectItem>
+              <SelectItem value="no-devices" disabled>No MIDI devices found</SelectItem>
             )}
           </SelectContent>
         </Select>
