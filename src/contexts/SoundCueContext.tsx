@@ -47,6 +47,22 @@ interface SoundCueContextType {
 
 export const SoundCueContext = createContext<SoundCueContextType | undefined>(undefined);
 
+const defaultSettings: Settings = {
+    midi: {
+      inputId: null,
+      mappings: {
+        togglePlayPause: 60, // C4
+        playNext: 62, // D4
+        playPrev: 59, // B3
+        stopPlayback: 57, // A3
+        skipForward: 64, // E4
+        skipBackward: 55, // G3
+      },
+    },
+    osc: { ip: '127.0.0.1', port: 9000 },
+    audio: { outputId: 'default' }
+};
+
 export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<Track[]>([]);
   const [shuffledQueue, setShuffledQueue] = useState<Track[]>([]);
@@ -58,11 +74,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
-  const [settings, setSettings] = useState<Settings>({
-    midi: { inputId: null },
-    osc: { ip: '127.0.0.1', port: 9000 },
-    audio: { outputId: 'default' }
-  });
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>('default');
@@ -72,16 +84,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const playNextRef = useRef((_isTrackEnd: boolean) => {});
 
   const getAudioOutputs = useCallback(async () => {
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-        try {
-            await navigator.mediaDevices.getUserMedia({ audio: true }); // Request permission
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const outputs = devices.filter(device => device.kind === 'audiooutput');
-            setAudioOutputs(outputs);
-        } catch (err) {
-            console.error("Error enumerating audio devices:", err);
-            toast({ variant: "destructive", title: "Audio Permission", description: "Could not list audio devices. Please grant permission." });
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            console.warn("Media devices API not available.");
+            return;
         }
+        await navigator.mediaDevices.getUserMedia({ audio: true }); // Request permission
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devices.filter(device => device.kind === 'audiooutput');
+        setAudioOutputs(outputs);
+    } catch (err) {
+        console.error("Error enumerating audio devices:", err);
+        toast({ variant: "destructive", title: "Audio Permission", description: "Could not list audio devices. Please grant permission." });
     }
   }, [toast]);
 
@@ -92,11 +106,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     
     const handleTimeUpdate = () => {
+      if (!audio) return;
       setProgress((audio.currentTime / audio.duration) * 100 || 0);
       setDuration(audio.duration || 0);
     };
     const handleEnded = () => playNextRef.current(true);
-    const handleCanPlay = () => setDuration(audio.duration || 0);
+    const handleCanPlay = () => {
+        if (!audio) return;
+        setDuration(audio.duration || 0);
+    }
     const handleError = () => {
         toast({
             variant: "destructive",
