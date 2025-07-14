@@ -33,7 +33,7 @@ interface SoundCueContextType {
   isShuffled: boolean;
   toggleShuffle: () => void;
   settings: Settings;
-  setSettings: (setter: React.SetStateAction<Settings>) => void;
+  setSettings: React.Dispatch<React.SetStateAction<Settings>>;
   playTrack: (index: number, andPlay?: boolean) => void;
   togglePlayPause: () => void;
   playNext: (fromError?: boolean) => void;
@@ -74,38 +74,38 @@ const defaultSettings: Settings = {
       fadeIn: { enabled: false, duration: 2 },
       fadeOut: { enabled: false, duration: 2 },
       maxVolume: { enabled: false, level: 100 },
-      volume: 1,
     }
 };
 
-const loadSettings = (): Settings => {
+const loadSettings = (): { settings: Settings; volume: number } => {
     if (typeof window === 'undefined') {
-        return defaultSettings;
+        return { settings: defaultSettings, volume: 1 };
     }
     try {
-        const savedSettings = localStorage.getItem('soundcue-settings');
-        if (savedSettings) {
-            const parsed = JSON.parse(savedSettings);
+        const savedData = localStorage.getItem('soundcue-settings');
+        if (savedData) {
+            const parsed = JSON.parse(savedData);
             // Deep merge to prevent losing nested properties if they don't exist in saved settings
             const mergedSettings = {
                 ...defaultSettings,
-                ...parsed,
-                midi: { ...defaultSettings.midi, ...parsed.midi, mappings: {...defaultSettings.midi.mappings, ...parsed.midi?.mappings} },
-                osc: { ...defaultSettings.osc, ...parsed.osc },
+                ...parsed.settings,
+                midi: { ...defaultSettings.midi, ...parsed.settings?.midi, mappings: {...defaultSettings.midi.mappings, ...parsed.settings?.midi?.mappings} },
+                osc: { ...defaultSettings.osc, ...parsed.settings?.osc },
                 audio: { 
                   ...defaultSettings.audio, 
-                  ...parsed.audio, 
-                  fadeIn: {...defaultSettings.audio.fadeIn, ...parsed.audio?.fadeIn}, 
-                  fadeOut: {...defaultSettings.audio.fadeOut, ...parsed.audio?.fadeOut},
-                  maxVolume: {...defaultSettings.audio.maxVolume, ...parsed.audio?.maxVolume}
+                  ...parsed.settings?.audio, 
+                  fadeIn: {...defaultSettings.audio.fadeIn, ...parsed.settings?.audio?.fadeIn}, 
+                  fadeOut: {...defaultSettings.audio.fadeOut, ...parsed.settings?.audio?.fadeOut},
+                  maxVolume: {...defaultSettings.audio.maxVolume, ...parsed.settings?.audio?.maxVolume}
                 },
             };
-            return mergedSettings;
+            const volume = typeof parsed.volume === 'number' ? parsed.volume : 1;
+            return { settings: mergedSettings, volume };
         }
     } catch (error) {
         console.error("Failed to load settings from localStorage", error);
     }
-    return defaultSettings;
+    return { settings: defaultSettings, volume: 1 };
 };
 
 
@@ -122,7 +122,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
   
-  const [settings, _setSettings] = useState<Settings>(defaultSettings);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [volume, setVolumeState] = useState(1);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
@@ -140,66 +141,45 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Hydration-safe settings load
-    const loadedSettings = loadSettings();
-    _setSettings(loadedSettings);
+    const { settings: loadedSettings, volume: loadedVolume } = loadSettings();
+    setSettings(loadedSettings);
+    setVolumeState(loadedVolume);
     setIsHydrated(true);
   }, []);
-  
-  const volume = settings.audio.volume;
+
   const selectedAudioOutputId = settings.audio.outputId;
-  
-  const setSettings = useCallback((setter: React.SetStateAction<Settings>) => {
-    _setSettings(prevSettings => {
-        const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
-        
-        // Handle max volume change side-effects
-        const oldMaxEnabled = prevSettings.audio.maxVolume.enabled;
-        const newMaxEnabled = newSettings.audio.maxVolume.enabled;
-        const newMaxLevel = newSettings.audio.maxVolume.level / 100;
-        
-        if (newMaxEnabled) {
-          if (!oldMaxEnabled || prevSettings.audio.maxVolume.level !== newSettings.audio.maxVolume.level) {
-             newSettings.audio.volume = Math.min(prevSettings.audio.volume, newMaxLevel);
-             if (audioRef.current) {
-                audioRef.current.volume = newSettings.audio.volume;
-             }
-          }
-        }
-        
+
+  // Save settings and volume to localStorage whenever they change
+  useEffect(() => {
+    if (isHydrated) {
         try {
-            localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
+            localStorage.setItem('soundcue-settings', JSON.stringify({ settings, volume }));
         } catch (error) {
-             console.error("Failed to save settings to localStorage", error);
+            console.error("Failed to save settings to localStorage", error);
         }
-        return newSettings;
-    });
-  }, []);
+    }
+  }, [settings, volume, isHydrated]);
+
 
   const setVolume = useCallback((newVol: number) => {
     let finalVol = newVol;
     
-    // Use a functional update to get the latest settings without depending on the settings object
-    _setSettings(currentSettings => {
-        if (currentSettings.audio.maxVolume.enabled) {
-            finalVol = Math.min(newVol, currentSettings.audio.maxVolume.level / 100);
-        }
+    if (settings.audio.maxVolume.enabled) {
+        finalVol = Math.min(newVol, settings.audio.maxVolume.level / 100);
+    }
 
-        if (audioRef.current) {
-            audioRef.current.volume = finalVol;
-        }
+    if (audioRef.current) {
+        audioRef.current.volume = finalVol;
+    }
+    
+    setVolumeState(finalVol);
 
-        if (finalVol > 0 && isMuted) {
-            setIsMuted(false);
-            if(audioRef.current) audioRef.current.muted = false;
-        }
+    if (finalVol > 0 && isMuted) {
+        setIsMuted(false);
+        if(audioRef.current) audioRef.current.muted = false;
+    }
+  }, [settings.audio.maxVolume, isMuted]);
 
-        // Only update settings if the volume value has actually changed
-        if (currentSettings.audio.volume !== finalVol) {
-            return {...currentSettings, audio: {...currentSettings.audio, volume: finalVol}};
-        }
-        return currentSettings;
-    });
-  }, [isMuted]);
 
   const stopFade = () => {
     if (fadeIntervalRef.current) {
@@ -222,63 +202,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         console.error("Error enumerating audio devices:", err);
     }
   }, []);
-
-  const fadeOutAnd = useCallback((callback: () => void) => {
-    stopFade();
-    if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
-      setIsFading(true);
-      const audio = audioRef.current;
-      const startVolume = isMuted ? 0 : volume;
-      let currentFadeTime = settings.audio.fadeOut.duration;
-      setFadeCountdown(currentFadeTime);
-
-      const steps = settings.audio.fadeOut.duration * 20; // 50ms interval
-      const stepValue = startVolume / steps;
-
-      fadeIntervalRef.current = setInterval(() => {
-        const newVolume = Math.max(0, audio.volume - stepValue);
-        audio.volume = newVolume;
-        currentFadeTime -= 0.05;
-        setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-
-        if (newVolume <= 0) {
-          stopFade();
-          callback();
-          audio.volume = startVolume; // Reset for next play
-        }
-      }, 50);
-    } else {
-      callback();
-    }
-  }, [settings.audio.fadeOut, isMuted, volume]);
-
-  const fadeIn = useCallback(() => {
-      stopFade();
-      if (settings.audio.fadeIn.enabled && settings.audio.fadeIn.duration > 0 && audioRef.current) {
-        setIsFading(true);
-        const audio = audioRef.current;
-        const targetVolume = isMuted ? 0 : volume;
-        audio.volume = 0;
-        let currentFadeTime = settings.audio.fadeIn.duration;
-        setFadeCountdown(currentFadeTime);
-
-        const steps = settings.audio.fadeIn.duration * 20; // 50ms interval
-        const stepValue = targetVolume / steps;
-
-        fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.min(targetVolume, audio.volume + stepValue);
-            audio.volume = newVolume;
-            currentFadeTime -= 0.05;
-            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-            
-            if (newVolume >= targetVolume) {
-                stopFade();
-            }
-        }, 50);
-      } else if (audioRef.current) {
-          audioRef.current.volume = isMuted ? 0 : volume;
-      }
-  }, [settings.audio.fadeIn, isMuted, volume]);
   
   const stopPlayback = useCallback((fade = true) => {
     const stopAction = () => {
@@ -289,13 +212,71 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       setIsPlaying(false);
     };
 
+    const fadeOutAnd = (callback: () => void) => {
+        stopFade();
+        if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
+          setIsFading(true);
+          const audio = audioRef.current;
+          const startVolume = isMuted ? 0 : volume;
+          let currentFadeTime = settings.audio.fadeOut.duration;
+          setFadeCountdown(currentFadeTime);
+    
+          const steps = settings.audio.fadeOut.duration * 20; // 50ms interval
+          const stepValue = startVolume / steps;
+    
+          fadeIntervalRef.current = setInterval(() => {
+            const newVolume = Math.max(0, audio.volume - stepValue);
+            audio.volume = newVolume;
+            currentFadeTime -= 0.05;
+            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+    
+            if (newVolume <= 0) {
+              stopFade();
+              callback();
+              audio.volume = startVolume; // Reset for next play
+            }
+          }, 50);
+        } else {
+          callback();
+        }
+    };
+
+
     if (fade && isPlaying) {
       fadeOutAnd(stopAction);
     } else {
       stopFade();
       stopAction();
     }
-  }, [fadeOutAnd, isPlaying]);
+  }, [isPlaying, settings.audio.fadeOut, isMuted, volume]);
+
+  const fadeIn = useCallback(() => {
+    stopFade();
+    if (settings.audio.fadeIn.enabled && settings.audio.fadeIn.duration > 0 && audioRef.current) {
+      setIsFading(true);
+      const audio = audioRef.current;
+      const targetVolume = isMuted ? 0 : volume;
+      audio.volume = 0;
+      let currentFadeTime = settings.audio.fadeIn.duration;
+      setFadeCountdown(currentFadeTime);
+
+      const steps = settings.audio.fadeIn.duration * 20; // 50ms interval
+      const stepValue = targetVolume / steps;
+
+      fadeIntervalRef.current = setInterval(() => {
+          const newVolume = Math.min(targetVolume, audio.volume + stepValue);
+          audio.volume = newVolume;
+          currentFadeTime -= 0.05;
+          setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+          
+          if (newVolume >= targetVolume) {
+              stopFade();
+          }
+      }, 50);
+    } else if (audioRef.current) {
+        audioRef.current.volume = isMuted ? 0 : volume;
+    }
+}, [settings.audio.fadeIn, isMuted, volume]);
 
   const playTrack = useCallback((index: number, andPlay = true) => {
     stopFade();
@@ -342,14 +323,43 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       }
     }
     
+    const fadeOutAnd = (callback: () => void) => {
+        stopFade();
+        if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
+          setIsFading(true);
+          const audio = audioRef.current;
+          const startVolume = isMuted ? 0 : volume;
+          let currentFadeTime = settings.audio.fadeOut.duration;
+          setFadeCountdown(currentFadeTime);
+    
+          const steps = settings.audio.fadeOut.duration * 20; // 50ms interval
+          const stepValue = startVolume / steps;
+    
+          fadeIntervalRef.current = setInterval(() => {
+            const newVolume = Math.max(0, audio.volume - stepValue);
+            audio.volume = newVolume;
+            currentFadeTime -= 0.05;
+            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+    
+            if (newVolume <= 0) {
+              stopFade();
+              callback();
+              audio.volume = startVolume; // Reset for next play
+            }
+          }, 50);
+        } else {
+          callback();
+        }
+      };
+
     fadeOutAnd(() => playTrack(nextIndex, true));
-  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, fadeOutAnd]);
+  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, settings.audio.fadeOut, isMuted, volume]);
 
 
   useEffect(() => {
     if (!audioRef.current) {
         audioRef.current = new Audio();
-        audioRef.current.volume = settings.audio.volume;
+        audioRef.current.volume = volume;
     }
     const audio = audioRef.current;
     
@@ -417,7 +427,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack, settings.audio.volume]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack, volume]);
   
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
@@ -477,7 +487,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           description: "Your browser does not support changing audio output devices.",
         });
     }
-  }, [toast, setSettings]);
+  }, [toast]);
   
   const toggleMute = () => {
       const newMuteState = !isMuted;
@@ -489,6 +499,35 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const togglePlayPause = useCallback(() => {
     if (isFading) return;
+    
+    const fadeOutAnd = (callback: () => void) => {
+        stopFade();
+        if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
+          setIsFading(true);
+          const audio = audioRef.current;
+          const startVolume = isMuted ? 0 : volume;
+          let currentFadeTime = settings.audio.fadeOut.duration;
+          setFadeCountdown(currentFadeTime);
+    
+          const steps = settings.audio.fadeOut.duration * 20; // 50ms interval
+          const stepValue = startVolume / steps;
+    
+          fadeIntervalRef.current = setInterval(() => {
+            const newVolume = Math.max(0, audio.volume - stepValue);
+            audio.volume = newVolume;
+            currentFadeTime -= 0.05;
+            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+    
+            if (newVolume <= 0) {
+              stopFade();
+              callback();
+              audio.volume = startVolume; // Reset for next play
+            }
+          }, 50);
+        } else {
+          callback();
+        }
+    };
 
     if (!currentTrack) {
         if (currentQueue.length > 0) {
@@ -512,11 +551,40 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           setIsPlaying(true);
       }
     }
-  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeOutAnd, fadeIn, isFading]);
+  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeIn, isFading, settings.audio.fadeOut, isMuted, volume]);
 
   const playPrev = useCallback(() => {
     if (isFading) return;
     
+    const fadeOutAnd = (callback: () => void) => {
+        stopFade();
+        if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
+          setIsFading(true);
+          const audio = audioRef.current;
+          const startVolume = isMuted ? 0 : volume;
+          let currentFadeTime = settings.audio.fadeOut.duration;
+          setFadeCountdown(currentFadeTime);
+    
+          const steps = settings.audio.fadeOut.duration * 20; // 50ms interval
+          const stepValue = startVolume / steps;
+    
+          fadeIntervalRef.current = setInterval(() => {
+            const newVolume = Math.max(0, audio.volume - stepValue);
+            audio.volume = newVolume;
+            currentFadeTime -= 0.05;
+            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+    
+            if (newVolume <= 0) {
+              stopFade();
+              callback();
+              audio.volume = startVolume; // Reset for next play
+            }
+          }, 50);
+        } else {
+          callback();
+        }
+    };
+
     const logic = () => {
         if (currentTrackIndex === null || !audioRef.current) return;
         
@@ -544,7 +612,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     } else {
       logic();
     }
-  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeOutAnd, fadeIn, isFading]);
+  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeIn, isFading, settings.audio.fadeOut, isMuted, volume]);
 
   const clearQueue = () => {
     stopPlayback(false);
@@ -597,6 +665,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const result = Array.from(queue);
     const [removed] = result.splice(startIndex, 1);
     result.splice(endIndex, 0, removed);
+    
+    // Update the queue state directly
     _setQueue(result);
 
     const currentTrackId = currentTrack?.id;
@@ -746,3 +816,5 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
 }
+
+    

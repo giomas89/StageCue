@@ -47,6 +47,7 @@ export interface Settings {
       enabled: boolean;
       level: number;
     },
-    volume: number;
   }
 }
+
+    

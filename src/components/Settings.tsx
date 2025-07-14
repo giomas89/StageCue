@@ -47,6 +47,7 @@ const COMMAND_ORDER: MidiCommand[] = [
 function MidiSettings() {
   const { 
     settings, 
+    setSettings,
     midiInputs, 
     lastMidiMessage, 
     learningCommand, 
@@ -294,26 +295,27 @@ function GeneralSettings() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleMaxVolEnabledChange = (checked: boolean) => {
-        setSettings(s => {
-            const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}};
-            if (checked) {
-              setVolume(newSettings.audio.maxVolume.level / 100);
+        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}));
+        if (checked) {
+            const maxLevel = settings.audio.maxVolume.level / 100;
+            if (volume > maxLevel) {
+                setVolume(maxLevel);
             }
-            return newSettings;
-        });
+        }
     };
     
     const handleMaxVolValueChange = (value: number[]) => {
         const newLevel = value[0];
         setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: newLevel}}}));
-        // If current volume is higher than the new max, adjust it down.
-        if (volume > newLevel / 100) {
-            setVolume(newLevel / 100);
+        
+        const maxLevelAsDecimal = newLevel / 100;
+        if (volume > maxLevelAsDecimal) {
+            setVolume(maxLevelAsDecimal);
         }
     };
 
     const exportSettings = () => {
-        const settingsJson = JSON.stringify(settings, null, 2);
+        const settingsJson = JSON.stringify({settings, volume}, null, 2);
         const blob = new Blob([settingsJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -332,8 +334,9 @@ function GeneralSettings() {
                 try {
                     const text = e.target?.result;
                     if (typeof text !== 'string') throw new Error("File could not be read");
-                    const importedSettings = JSON.parse(text);
-                    setSettings(importedSettings);
+                    const imported = JSON.parse(text);
+                    if(imported.settings) setSettings(imported.settings);
+                    if(typeof imported.volume === 'number') setVolume(imported.volume);
                     toast({title: "Settings Imported"});
                 } catch (error) {
                     toast({variant: "destructive", title: "Import Failed", description: "Invalid settings file."});
@@ -501,3 +504,5 @@ export default function SettingsPanel() {
     </Tabs>
   );
 }
+
+    
