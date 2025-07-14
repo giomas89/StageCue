@@ -21,6 +21,7 @@ interface SoundCueContextType {
   isPlaying: boolean;
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   isFading: boolean;
+  fadeCountdown: number | null;
   progress: number;
   duration: number;
   volume: number;
@@ -37,7 +38,7 @@ interface SoundCueContextType {
   togglePlayPause: () => void;
   playNext: (fromError?: boolean) => void;
   playPrev: () => void;
-  stopPlayback: () => void;
+  stopPlayback: (fade?: boolean) => void;
   clearQueue: () => void;
   seek: (percentage: number) => void;
   skipForward: () => void;
@@ -101,6 +102,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFading, setIsFading] = useState(false);
+  const [fadeCountdown, setFadeCountdown] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setInternalVolume] = useState(1);
@@ -118,6 +120,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   
+  const currentQueue = isShuffled ? shuffledQueue : queue;
+  const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
+
   useEffect(() => {
     // Hydration-safe settings load
     setSettings(loadSettings());
@@ -153,21 +158,29 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (fadeIntervalRef.current) {
         clearInterval(fadeIntervalRef.current);
         fadeIntervalRef.current = null;
-        setIsFading(false);
     }
+    setIsFading(false);
+    setFadeCountdown(null);
   }
 
-  const fadeOutAnd = (callback: () => void) => {
+  const fadeOutAnd = useCallback((callback: () => void) => {
     stopFade();
     if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
       setIsFading(true);
       const audio = audioRef.current;
       const startVolume = isMuted ? 0 : volume;
-      const step = startVolume / (settings.audio.fadeOut.duration * 20); // 50ms steps
+      let currentFadeTime = settings.audio.fadeOut.duration;
+      setFadeCountdown(currentFadeTime);
+
+      const steps = settings.audio.fadeOut.duration * 20; // 50ms interval
+      const stepValue = startVolume / steps;
 
       fadeIntervalRef.current = setInterval(() => {
-        const newVolume = Math.max(0, audio.volume - step);
+        const newVolume = Math.max(0, audio.volume - stepValue);
         audio.volume = newVolume;
+        currentFadeTime -= 0.05;
+        setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+
         if (newVolume <= 0) {
           stopFade();
           callback();
@@ -177,20 +190,27 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     } else {
       callback();
     }
-  };
+  }, [settings.audio.fadeOut, isMuted, volume]);
 
-  const fadeIn = () => {
+  const fadeIn = useCallback(() => {
       stopFade();
       if (settings.audio.fadeIn.enabled && settings.audio.fadeIn.duration > 0 && audioRef.current) {
         setIsFading(true);
         const audio = audioRef.current;
         const targetVolume = isMuted ? 0 : volume;
         audio.volume = 0;
-        const step = targetVolume / (settings.audio.fadeIn.duration * 20); // 50ms steps
+        let currentFadeTime = settings.audio.fadeIn.duration;
+        setFadeCountdown(currentFadeTime);
+
+        const steps = settings.audio.fadeIn.duration * 20; // 50ms interval
+        const stepValue = targetVolume / steps;
 
         fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.min(targetVolume, audio.volume + step);
+            const newVolume = Math.min(targetVolume, audio.volume + stepValue);
             audio.volume = newVolume;
+            currentFadeTime -= 0.05;
+            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+            
             if (newVolume >= targetVolume) {
                 stopFade();
             }
@@ -198,19 +218,35 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       } else if (audioRef.current) {
           audioRef.current.volume = isMuted ? 0 : volume;
       }
-  }
+  }, [settings.audio.fadeIn, isMuted, volume]);
   
+  const stopPlayback = useCallback((fade = true) => {
+    setIsPlaying(false);
+    const stopAction = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+
+    if (fade) {
+      fadeOutAnd(stopAction);
+    } else {
+      stopFade();
+      stopAction();
+    }
+  }, [fadeOutAnd]);
+
   const playNext = useCallback((fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
     
     let nextIndex = currentTrackIndex + 1;
-    const currentQueue = isShuffled ? shuffledQueue : queue;
     
     if (nextIndex >= currentQueue.length) {
       if (repeatMode === 'all') {
         nextIndex = 0;
       } else {
-        stopPlayback();
+        stopPlayback(false);
         if (currentQueue.length > 0) {
             playTrack(0, false);
         }
@@ -218,11 +254,40 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       }
     }
     if (nextIndex === currentTrackIndex && currentQueue.length === 1 && !fromError) {
-        stopPlayback();
+        stopPlayback(false);
         return;
     }
     playTrack(nextIndex, true);
-  }, [currentTrackIndex, queue, shuffledQueue, isShuffled, repeatMode]);
+  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback]);
+
+  const playTrack = useCallback((index: number, andPlay = true) => {
+    const playLogic = () => {
+        const trackToPlay = currentQueue[index];
+        if (trackToPlay && audioRef.current) {
+            setCurrentTrackIndex(index);
+            audioRef.current.src = trackToPlay.url;
+            audioRef.current.load();
+            if (andPlay) {
+                setIsPlaying(true);
+                audioRef.current.play().then(() => {
+                    fadeIn();
+                }).catch(e => {
+                    console.error("Playback failed on playTrack", e);
+                    setIsPlaying(false);
+                });
+            } else {
+                setIsPlaying(false);
+            }
+        }
+    };
+
+    if (isPlaying) {
+        fadeOutAnd(playLogic);
+    } else {
+        playLogic();
+    }
+  }, [currentQueue, isPlaying, fadeIn, fadeOutAnd]);
+
 
   useEffect(() => {
     if (!audioRef.current) {
@@ -239,37 +304,41 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     };
 
     const handleEnded = () => {
-      fadeOutAnd(() => {
-          if (repeatMode === 'one') {
-              audio.currentTime = 0;
-              audio.play().then(fadeIn);
-          } else {
-              playNext();
+        if (repeatMode === 'one') {
+          if (audio) {
+            audio.currentTime = 0;
+            audio.play().then(fadeIn);
           }
-      });
+        } else {
+            playNext();
+        }
     };
     
-    const handleError = (e: any) => {
-        const error = (e.target as HTMLAudioElement).error;
-        if (audio?.src && error) {
-            let errorMsg = `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`;
-             if (error.code === MediaError.MEDIA_ERR_DECODE || error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-                 errorMsg = `The audio file might be corrupt or in an unsupported format.`;
-            } else if (error.code === MediaError.MEDIA_ERR_ABORTED) {
-                 errorMsg = `Playback was aborted.`;
-            }
-            
-            toast({
-                variant: "destructive",
-                title: "Playback Error",
-                description: errorMsg,
-            });
-            setIsPlaying(false);
-            // Don't auto-skip to avoid loops with multiple bad files.
-            // playNext(true); 
-        }
-    }
+    const handleError = (e: Event) => {
+      const error = (e.target as HTMLAudioElement).error;
+      if (!audio?.src || !error) return;
+    
+      let errorMsg = `Could not play audio. Code: ${error.code}, Message: ${error.message}`;
+      if (error.code === MediaError.MEDIA_ERR_DECODE) {
+        errorMsg = `The audio file might be corrupt or in an unsupported format.`;
+      } else if (error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        errorMsg = `The audio format is not supported.`;
+      } else if (error.code === MediaError.MEDIA_ERR_NETWORK) {
+        errorMsg = `A network error caused the download to fail.`;
+      } else if (error.code === MediaError.MEDIA_ERR_ABORTED) {
+        errorMsg = `Playback was aborted.`;
+      }
+      
+      toast({
+        variant: "destructive",
+        title: `Playback Error: ${currentTrack?.name || 'Unknown Track'}`,
+        description: errorMsg,
+      });
 
+      setIsPlaying(false);
+      stopFade();
+    };
+    
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
@@ -281,31 +350,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn]);
   
-  const currentQueue = isShuffled ? shuffledQueue : queue;
-  const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
-
-  const playTrack = useCallback((index: number, andPlay = true) => {
-    const trackToPlay = (isShuffled ? shuffledQueue : queue)[index];
-    if (trackToPlay && audioRef.current) {
-      setCurrentTrackIndex(index);
-      audioRef.current.src = trackToPlay.url;
-      audioRef.current.load();
-      if (andPlay) {
-        setIsPlaying(true);
-        audioRef.current.play().then(() => {
-          fadeIn();
-        }).catch(e => {
-          console.error("Playback failed on playTrack", e);
-          setIsPlaying(false);
-        });
-      } else {
-        setIsPlaying(false);
-      }
-    }
-  }, [queue, isShuffled, shuffledQueue]);
-
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
         const newQueue = typeof setter === 'function' ? setter(currentQueue) : setter;
@@ -336,13 +382,13 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             setCurrentTrackIndex(newIndex);
         } else if (newQueue.length > 0) {
             playTrack(0, false);
-            setCurrentTrackIndex(0);
         } else {
             setCurrentTrackIndex(null);
+            stopPlayback(false);
         }
     }
 
-  }, [isShuffled, queue, currentTrack]);
+  }, [isShuffled, queue]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const setVolume = (vol: number) => {
     setInternalVolume(vol);
@@ -406,25 +452,17 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           });
       }
     }
-  }, [isPlaying, currentTrack, currentQueue, playTrack]);
-
-  const stopPlayback = useCallback(() => {
-    setIsPlaying(false);
-    fadeOutAnd(() => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-    })
-  }, []);
+  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeOutAnd, fadeIn]);
 
   const playPrev = useCallback(() => {
     fadeOutAnd(() => {
-        if (currentTrackIndex === null) return;
-        if ((audioRef.current?.currentTime || 0) > 3) {
-          audioRef.current!.currentTime = 0;
+        if (currentTrackIndex === null || !audioRef.current) return;
+        
+        if (audioRef.current.currentTime > 3) {
+          audioRef.current.currentTime = 0;
           if(!isPlaying) {
-              setIsPlaying(true);
+            setIsPlaying(true);
+            audioRef.current.play();
           }
           fadeIn();
         } else {
@@ -437,10 +475,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           }
         }
     });
-  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying]);
+  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeOutAnd, fadeIn]);
 
   const clearQueue = () => {
-    stopPlayback();
+    stopPlayback(false);
     queue.forEach(track => {
       if (track.url.startsWith('blob:')) {
         URL.revokeObjectURL(track.url);
@@ -518,6 +556,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     isPlaying,
     setIsPlaying,
     isFading,
+    fadeCountdown,
     progress,
     duration,
     volume,

@@ -16,7 +16,6 @@ import {
   Rewind,
   Music,
   StopCircle,
-  Loader,
 } from 'lucide-react';
 import { useSoundCue } from '@/hooks/useSoundCue';
 import { Button } from './ui/button';
@@ -44,6 +43,7 @@ export default function Player() {
     currentTrack,
     isPlaying,
     isFading,
+    fadeCountdown,
     togglePlayPause,
     playNext,
     playPrev,
@@ -147,9 +147,9 @@ export default function Player() {
                 <TooltipContent><p>Back 10s (J)</p></TooltipContent>
               </Tooltip>
               
-              <Button size="lg" className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90" onClick={togglePlayPause} disabled={!currentTrack || isFading}>
-                  {isFading ? (
-                    <Loader className="w-8 h-8 animate-spin" />
+              <Button size="lg" className="rounded-full w-16 h-16 bg-primary hover:bg-primary/90 text-2xl font-bold" onClick={togglePlayPause} disabled={!currentTrack || isFading}>
+                  {isFading && fadeCountdown !== null ? (
+                    <span>{fadeCountdown.toFixed(1)}</span>
                   ) : isPlaying ? (
                     <Pause className="w-8 h-8 fill-primary-foreground" />
                   ) : (
@@ -159,7 +159,7 @@ export default function Player() {
               
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={stopPlayback} disabled={!currentTrack}>
+                  <Button variant="ghost" size="icon" onClick={() => stopPlayback()} disabled={!currentTrack}>
                       <StopCircle className="w-6 h-6" />
                   </Button>
                 </TooltipTrigger>
