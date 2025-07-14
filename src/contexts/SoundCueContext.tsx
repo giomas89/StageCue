@@ -147,6 +147,24 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setIsHydrated(true);
   }, []);
   
+  const setSettings = useCallback((setter: React.SetStateAction<Settings>) => {
+    _setSettings(prevSettings => {
+        const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
+
+        try {
+            localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
+        } catch (error) {
+             console.error("Failed to save settings to localStorage", error);
+        }
+
+        if (audioRef.current) {
+          audioRef.current.volume = newSettings.audio.volume;
+        }
+
+        return newSettings;
+    });
+  }, []);
+
   const stopFade = () => {
     if (fadeIntervalRef.current) {
         clearInterval(fadeIntervalRef.current);
@@ -156,40 +174,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setFadeCountdown(null);
   }
 
- const setSettings = (setter: React.SetStateAction<Settings>) => {
-    _setSettings(prevSettings => {
-        const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
-        
-        try {
-            localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
-            setSelectedAudioOutputId(newSettings.audio.outputId);
-        } catch (error) {
-             console.error("Failed to save settings to localStorage", error);
-        }
-        
-        let finalVolume = newSettings.audio.volume;
+ const volume = settings.audio.volume;
 
-        if (newSettings.audio.maxVolume.enabled) {
-          const maxVol = newSettings.audio.maxVolume.level / 100;
-           if (newSettings.audio.maxVolume.level !== prevSettings.audio.maxVolume.level) {
-              finalVolume = maxVol;
-           } else if (finalVolume > maxVol) {
-              finalVolume = maxVol;
-           }
-        }
-        
-        if (audioRef.current && finalVolume !== prevSettings.audio.volume) {
-            audioRef.current.volume = finalVolume;
-        }
-
-        newSettings.audio.volume = finalVolume;
-        return newSettings;
-    });
-  };
-
-  const volume = settings.audio.volume;
-
-  const setVolume = (vol: number) => {
+ const setVolume = (vol: number) => {
     let newVol = vol;
     if (settings.audio.maxVolume.enabled) {
       newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
@@ -736,5 +723,3 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
 }
-
-    
