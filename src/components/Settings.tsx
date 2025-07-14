@@ -32,12 +32,22 @@ interface MidiMessage {
 
 const COMMAND_LABELS: Record<MidiCommand, string> = {
     togglePlayPause: 'Play / Pause',
+    stopPlayback: 'Stop',
     playNext: 'Next Track',
     playPrev: 'Previous Track',
-    stopPlayback: 'Stop',
     skipForward: 'Skip Forward 10s',
     skipBackward: 'Skip Backward 10s'
 }
+
+const COMMAND_ORDER: MidiCommand[] = [
+    'togglePlayPause',
+    'stopPlayback',
+    'playNext',
+    'playPrev',
+    'skipForward',
+    'skipBackward'
+];
+
 
 function MidiSettings() {
   const { settings, setSettings, playTrack, togglePlayPause, playNext, playPrev, stopPlayback, skipForward, skipBackward } = useSoundCue();
@@ -186,7 +196,7 @@ function MidiSettings() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {(Object.keys(COMMAND_LABELS) as MidiCommand[]).map(cmd => (
+                            {COMMAND_ORDER.map(cmd => (
                             <TableRow key={cmd}>
                                 <TableCell className="font-medium">{COMMAND_LABELS[cmd]}</TableCell>
                                 <TableCell><code>{formatMidiNote(settings.midi.mappings[cmd])}</code></TableCell>
@@ -324,7 +334,7 @@ function OscSettings() {
                         <CardTitle>OSC Monitor</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <Alert>
+                         <Alert>
                           <Info className="h-4 w-4" />
                           <AlertTitle>Info</AlertTitle>
                           <AlertDescription>
