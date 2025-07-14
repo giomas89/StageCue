@@ -352,34 +352,35 @@ function OscSettings() {
 }
 
 function GeneralSettings() {
-    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput, volume } = useSoundCue();
+    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput, volume, setVolume } = useSoundCue();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [maxVolumeLevel, setMaxVolumeLevel] = useState(settings.audio.maxVolume.level);
     
-    useEffect(() => {
-      // When max volume is disabled, its slider should follow the actual player volume.
-      if (!settings.audio.maxVolume.enabled) {
-        setMaxVolumeLevel(Math.round(volume * 100));
-      } else {
+     useEffect(() => {
         setMaxVolumeLevel(settings.audio.maxVolume.level);
-      }
-    }, [volume, settings.audio.maxVolume.enabled, settings.audio.maxVolume.level]);
-
+    }, [settings.audio.maxVolume.level]);
 
     const handleMaxVolEnabledChange = (checked: boolean) => {
-        setSettings(s => ({
-            ...s,
-            audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}
-        }));
+        setSettings(s => {
+            const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}};
+            if (checked && volume > newSettings.audio.maxVolume.level / 100) {
+                setVolume(newSettings.audio.maxVolume.level / 100);
+            }
+            return newSettings;
+        });
     };
     
     const handleMaxVolValueChange = (value: number) => {
         setMaxVolumeLevel(value);
-        if (settings.audio.maxVolume.enabled) {
-            setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value}}}));
-        }
+        setSettings(s => {
+            const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value}}};
+            if (newSettings.audio.maxVolume.enabled && volume > value / 100) {
+                setVolume(value / 100);
+            }
+            return newSettings;
+        });
     };
 
 
