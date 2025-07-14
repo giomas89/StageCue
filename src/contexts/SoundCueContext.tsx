@@ -74,12 +74,13 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const getAudioOutputs = useCallback(async () => {
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
         try {
+            await navigator.mediaDevices.getUserMedia({ audio: true }); // Request permission
             const devices = await navigator.mediaDevices.enumerateDevices();
             const outputs = devices.filter(device => device.kind === 'audiooutput');
             setAudioOutputs(outputs);
         } catch (err) {
             console.error("Error enumerating audio devices:", err);
-            toast({ variant: "destructive", title: "Error", description: "Could not list audio devices." });
+            toast({ variant: "destructive", title: "Audio Permission", description: "Could not list audio devices. Please grant permission." });
         }
     }
   }, [toast]);
