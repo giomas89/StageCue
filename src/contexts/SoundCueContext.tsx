@@ -19,6 +19,8 @@ interface SoundCueContextType {
   toggleShuffle: () => void;
   currentTrackIndex: number | null;
   setCurrentTrackIndex: React.Dispatch<React.SetStateAction<number | null>>;
+  selectedIndex: number | null;
+  setSelectedIndex: React.Dispatch<React.SetStateAction<number | null>>;
   currentTrack: Track | null;
   isPlaying: boolean;
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
@@ -120,6 +122,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<Track[]>([]);
   const [shuffledQueue, setShuffledQueue] = useState<Track[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFading, setIsFading] = useState(false);
   const [fadeCountdown, setFadeCountdown] = useState<number | null>(null);
@@ -128,7 +131,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
   
-  const [_settings, _setSettings] = useState<Settings>(defaultSettings);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -148,13 +151,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
   const selectedAudioOutputId = audioSettings.outputId;
 
-  const setSettings = useCallback((updater: React.SetStateAction<Settings>) => {
-    _setSettings(prev => {
-        const newState = typeof updater === 'function' ? (updater as (prevState: Settings) => Settings)(prev) : updater;
-        return newState;
-    });
-  }, []);
-
   useEffect(() => {
     const { settings: loadedSettings, audioSettings: loadedAudioSettings, volume: loadedVolume, isMuted: loadedIsMuted } = loadInitialState();
     setSettings(loadedSettings);
@@ -162,18 +158,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setVolume(loadedVolume);
     setIsMuted(loadedIsMuted);
     setIsHydrated(true);
-  }, [setSettings]);
+  }, []);
   
   useEffect(() => {
     if (isHydrated) {
         try {
-            const dataToSave = { settings: _settings, audioSettings, volume, isMuted };
+            const dataToSave = { settings, audioSettings, volume, isMuted };
             localStorage.setItem('soundcue-settings', JSON.stringify(dataToSave));
         } catch (error) {
             console.error("Failed to save settings to localStorage", error);
         }
     }
-  }, [_settings, audioSettings, volume, isMuted, isHydrated]);
+  }, [settings, audioSettings, volume, isMuted, isHydrated]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -291,6 +287,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     
     if (trackToPlay && audioRef.current) {
         setCurrentTrackIndex(index);
+        setSelectedIndex(index);
         audioRef.current.src = trackToPlay.url;
         audioRef.current.load();
         
@@ -437,6 +434,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       if (queue.length > 0 && currentTrackIndex === null) {
           playTrack(0, false);
       }
+      if(queue.length === 0) {
+        setSelectedIndex(null);
+      }
   }, [queue, currentTrackIndex, playTrack]);
   
   const toggleShuffle = useCallback(() => {
@@ -449,9 +449,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       setShuffledQueue(shuffled);
       const newIndex = currentTrackId ? shuffled.findIndex(t => t.id === currentTrackId) : 0;
       setCurrentTrackIndex(newIndex !== -1 ? newIndex : 0);
+      setSelectedIndex(newIndex !== -1 ? newIndex : 0);
     } else {
       const newIndex = currentTrackId ? queue.findIndex(t => t.id === currentTrackId) : 0;
       setCurrentTrackIndex(newIndex !== -1 ? newIndex : 0);
+      setSelectedIndex(newIndex !== -1 ? newIndex : 0);
     }
   }, [isShuffled, queue, currentTrack]);
   
@@ -510,8 +512,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     };
 
     if (!currentTrack) {
+        const indexToPlay = selectedIndex !== null ? selectedIndex : 0;
         if (currentQueue.length > 0) {
-            playTrack(0, true);
+            playTrack(indexToPlay, true);
         }
         return;
     };
@@ -531,7 +534,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           setIsPlaying(true);
       }
     }
-  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeIn, isFading, audioSettings.fadeOut, isMuted, volume]);
+  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeIn, isFading, audioSettings.fadeOut, isMuted, volume, selectedIndex]);
 
   const playPrev = useCallback(() => {
     if (isFading) return;
@@ -646,15 +649,27 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     newQueue.splice(endIndex, 0, removed);
     
     setQueue(newQueue);
-
-    const currentTrackId = currentTrack?.id;
-    if (currentTrackId) {
-      const newIndex = newQueue.findIndex(track => track.id === currentTrackId);
-      if (newIndex !== -1) {
-        setCurrentTrackIndex(newIndex);
+    
+    // Update current playing index
+    if (currentTrackIndex !== null) {
+      const currentTrackId = queue[currentTrackIndex].id;
+      const newPlayingIndex = newQueue.findIndex(t => t.id === currentTrackId);
+      if (newPlayingIndex !== -1) {
+        setCurrentTrackIndex(newPlayingIndex);
       }
     }
-  }, [queue, isShuffled, toast, currentTrack]);
+
+    // Update selected index
+    if(selectedIndex !== null) {
+      const selectedTrackId = queue[selectedIndex].id;
+      const newSelectedIndex = newQueue.findIndex(t => t.id === selectedTrackId);
+       if (newSelectedIndex !== -1) {
+        setSelectedIndex(newSelectedIndex);
+      }
+    }
+
+
+  }, [queue, isShuffled, toast, currentTrackIndex, selectedIndex]);
   
   const midiCommandActions = {
     togglePlayPause,
@@ -673,7 +688,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const requestMidi = async () => {
         try {
             if (navigator.requestMIDIAccess) {
-                const midiAccess = await navigator.requestMIDIAccess();
+                const midiAccess = await navigator.requestMIDIAccess({ sysex: false });
                 const inputs = Array.from(midiAccess.inputs.values());
                 setMidiInputs(inputs);
             }
@@ -691,7 +706,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   
   
   useEffect(() => {
-    const selectedInput = midiInputs.find(input => input.id === _settings.midi.inputId);
+    const selectedInput = midiInputs.find(input => input.id === settings.midi.inputId);
 
     midiInputs.forEach(input => {
       if (input.onmidimessage) {
@@ -725,8 +740,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
                 return;
             }
             
-            const commandToTrigger = (Object.keys(_settings.midi.mappings) as MidiCommand[]).find(
-                cmd => _settings.midi.mappings[cmd] === note
+            const commandToTrigger = (Object.keys(settings.midi.mappings) as MidiCommand[]).find(
+                cmd => settings.midi.mappings[cmd] === note
             );
 
             if(commandToTrigger) {
@@ -742,7 +757,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(selectedInput) selectedInput.onmidimessage = null;
       };
     }
-  }, [_settings.midi.inputId, _settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions, setSettings]);
+  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions]);
 
 
   if (!isHydrated) {
@@ -756,6 +771,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     toggleShuffle,
     currentTrackIndex,
     setCurrentTrackIndex,
+    selectedIndex,
+    setSelectedIndex,
     currentTrack,
     isPlaying,
     setIsPlaying,
@@ -769,7 +786,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setIsMuted,
     repeatMode,
     setRepeatMode,
-    settings: _settings,
+    settings,
     setSettings,
     audioSettings,
     setAudioSettings,

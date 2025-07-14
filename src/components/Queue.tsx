@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useRef, useState } from 'react';
@@ -30,7 +31,7 @@ const formatDuration = (seconds: number | undefined) => {
 };
 
 export default function Queue() {
-  const { queue, setQueue, currentTrackIndex, playTrack, clearQueue, reorderQueue, isShuffled } = useSoundCue();
+  const { queue, setQueue, currentTrackIndex, playTrack, clearQueue, reorderQueue, isShuffled, selectedIndex, setSelectedIndex } = useSoundCue();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [playlistName, setPlaylistName] = useState("playlist");
@@ -209,10 +210,11 @@ export default function Queue() {
                             <li
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
-                                onDoubleClick={() => playTrack(index)}
+                                onClick={() => setSelectedIndex(index)}
+                                onDoubleClick={() => playTrack(index, true)}
                                 className={cn(
                                 'flex items-center justify-between p-3 rounded-md group',
-                                index === currentTrackIndex ? 'bg-primary/20' : 'hover:bg-muted',
+                                index === currentTrackIndex ? 'bg-primary/20' : (index === selectedIndex ? 'bg-muted' : 'hover:bg-muted'),
                                 snapshot.isDragging && 'bg-accent shadow-lg'
                                 )}
                             >
