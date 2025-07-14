@@ -107,6 +107,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const playNextRef = useRef((_isTrackEnd: boolean) => {});
+  const isPlayingRef = useRef(false);
 
   // Save settings to localStorage whenever they change
   useEffect(() => {
@@ -149,10 +150,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       setDuration(audio.duration || 0);
     };
     const handleEnded = () => playNextRef.current(true);
+    
     const handleCanPlay = () => {
         if (!audio) return;
         setDuration(audio.duration || 0);
+        if (isPlayingRef.current) {
+            audio.play().catch(e => {
+                console.error("Playback failed on canplay", e);
+                setIsPlaying(false);
+                isPlayingRef.current = false;
+            });
+        }
     }
+    
     const handleError = () => {
         toast({
             variant: "destructive",
@@ -160,6 +170,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             description: "Could not play the selected audio file."
         });
         setIsPlaying(false);
+        isPlayingRef.current = false;
     }
 
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
@@ -183,22 +194,19 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const playTrack = useCallback((index: number, andPlay = true) => {
     const trackToPlay = currentQueue[index];
     if (trackToPlay && audioRef.current) {
+      setCurrentTrackIndex(index);
+      setIsPlaying(andPlay);
+      isPlayingRef.current = andPlay;
+      
       if (audioRef.current.src !== trackToPlay.url) {
         audioRef.current.src = trackToPlay.url;
         audioRef.current.load();
-      }
-      
-      setCurrentTrackIndex(index);
-      
-      if (andPlay) {
-        audioRef.current.play()
-          .then(() => setIsPlaying(true))
-          .catch(e => {
-            console.error("Playback failed", e);
+      } else if (andPlay) {
+         audioRef.current.play().catch(e => {
+            console.error("Playback failed on re-play", e);
             setIsPlaying(false);
-          });
-      } else {
-        setIsPlaying(false);
+            isPlayingRef.current = false;
+         });
       }
     }
   }, [currentQueue]);
@@ -283,11 +291,18 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (isPlaying) {
       audioRef.current?.pause();
       setIsPlaying(false);
+      isPlayingRef.current = false;
     } else {
-      audioRef.current?.play().then(() => setIsPlaying(true)).catch(e => {
-          console.error("Playback failed", e);
-          setIsPlaying(false);
-      });
+      if (audioRef.current) {
+          audioRef.current.play().then(() => {
+              setIsPlaying(true);
+              isPlayingRef.current = true;
+          }).catch(e => {
+              console.error("Playback failed", e);
+              setIsPlaying(false);
+              isPlayingRef.current = false;
+          });
+      }
     }
   }, [isPlaying, currentTrack, currentQueue, playTrack]);
 
@@ -296,6 +311,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         setIsPlaying(false);
+        isPlayingRef.current = false;
     }
   }, []);
 
@@ -306,6 +322,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if (audioRef.current) {
             audioRef.current.currentTime = 0;
             audioRef.current.play();
+            setIsPlaying(true);
+            isPlayingRef.current = true;
         }
         return;
     }
@@ -316,6 +334,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         nextIndex = 0;
       } else {
         setIsPlaying(false);
+        isPlayingRef.current = false;
         stopPlayback();
         return;
       }
