@@ -50,13 +50,14 @@ export default function Queue() {
           url: URL.createObjectURL(file),
         }));
 
-      if (newTracks.length > 0) {
-           toast({ title: "Tracks added", description: `${newTracks.length} tracks added to the queue.` });
-      } else {
+      if (newTracks.length === 0) {
+        toast({ variant: "destructive", title: "No audio files selected." });
         return;
       }
       
       setQueue(prevQueue => [...prevQueue, ...newTracks]);
+
+      toast({ title: "Tracks added", description: `${newTracks.length} tracks added to the queue.` });
 
       // Get duration for new tracks
       newTracks.forEach(track => {

@@ -129,7 +129,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         setAudioOutputs(outputs);
     } catch (err) {
         console.error("Error enumerating audio devices:", err);
-        // toast({ variant: "destructive", title: "Audio Permission", description: "Could not list audio devices. Please grant permission." });
     }
   }, []);
 
@@ -192,7 +191,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (currentTrack && audioRef.current) {
         const wasPlaying = isPlaying;
-        // Check if the src is different before setting it to avoid re-loading the same track
         if (audioRef.current.src !== currentTrack.url) {
             audioRef.current.src = currentTrack.url;
             audioRef.current.load();
@@ -247,14 +245,14 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           description: "Could not set audio output device.",
         });
       }
-    } else if (deviceId !== 'default') { // Don't show toast for the default initial setting
+    } else if (deviceId !== 'default') {
         toast({
           variant: "destructive",
           title: "Feature Not Supported",
           description: "Your browser does not support changing audio output devices.",
         });
     }
-  }, [toast]);
+  }, [toast, setSettings]);
 
   const toggleMute = () => {
       setIsMuted(prev => {
