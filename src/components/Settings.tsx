@@ -389,43 +389,36 @@ function GeneralSettings() {
 
     return (
         <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Audio Output</CardTitle>
-                    <CardDescription>Choose where to play the audio.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                     <Select onValueChange={setAudioOutput} value={selectedAudioOutputId || 'default'}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select an audio output" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="default">Default System Output</SelectItem>
-                            {audioOutputs.map(output => (
-                                <SelectItem key={output.deviceId} value={output.deviceId}>
-                                    {output.label || `Output ${output.deviceId.substring(0,6)}`}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </CardContent>
-            </Card>
+            <div className="space-y-2">
+                <Label className="text-base font-semibold">Audio Output</Label>
+                <p className="text-sm text-muted-foreground">Choose where to play the audio.</p>
+                <Select onValueChange={setAudioOutput} value={selectedAudioOutputId || 'default'}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select an audio output" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="default">Default System Output</SelectItem>
+                        {audioOutputs.map(output => (
+                            <SelectItem key={output.deviceId} value={output.deviceId}>
+                                {output.label || `Output ${output.deviceId.substring(0,6)}`}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Audio Effects</CardTitle>
-                    <CardDescription>Configure fade-in and fade-out effects for smooth transitions.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-4">
-                    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-4">
-                        {/* Fade-in Row */}
+            <div className="space-y-3">
+                <Label className="text-base font-semibold">Audio Effects</Label>
+                 <p className="text-sm text-muted-foreground">Configure fade-in and fade-out effects.</p>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
                         <Switch
                             id="fadein-enabled"
                             checked={settings.audio.fadeIn.enabled}
                             onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, fadeIn: {...s.audio.fadeIn, enabled: checked }}}))}
                             aria-label="Toggle Fade-in"
                         />
-                        <Label htmlFor="fadein-duration" className={cn(!settings.audio.fadeIn.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="fadein-duration" className={cn("text-sm", !settings.audio.fadeIn.enabled && "text-muted-foreground/50")}>
                             Fade-in Duration
                         </Label>
                         <div className={cn("relative w-24", !settings.audio.fadeIn.enabled && "opacity-50")}>
@@ -442,15 +435,15 @@ function GeneralSettings() {
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">s</span>
                         </div>
-
-                        {/* Fade-out Row */}
+                    </div>
+                     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
                         <Switch
                             id="fadeout-enabled"
                             checked={settings.audio.fadeOut.enabled}
                             onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, fadeOut: {...s.audio.fadeOut, enabled: checked }}}))}
                             aria-label="Toggle Fade-out"
                         />
-                        <Label htmlFor="fadeout-duration" className={cn(!settings.audio.fadeOut.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="fadeout-duration" className={cn("text-sm", !settings.audio.fadeOut.enabled && "text-muted-foreground/50")}>
                             Fade-out Duration
                         </Label>
                         <div className={cn("relative w-24", !settings.audio.fadeOut.enabled && "opacity-50")}>
@@ -468,23 +461,21 @@ function GeneralSettings() {
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">s</span>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Volume Control</CardTitle>
-                    <CardDescription>Set a maximum volume limit for the player.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-4">
-                     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-4">
+            <div className="space-y-3">
+                 <Label className="text-base font-semibold">Volume Control</Label>
+                 <p className="text-sm text-muted-foreground">Set a maximum volume limit for the player.</p>
+                 <div className="space-y-4">
+                     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4">
                         <Switch
                             id="maxvolume-enabled"
                             checked={settings.audio.maxVolume.enabled}
                             onCheckedChange={(checked) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}))}
                             aria-label="Toggle Maximum Volume"
                         />
-                        <Label htmlFor="maxvolume-level" className={cn(!settings.audio.maxVolume.enabled && "text-muted-foreground/50")}>
+                        <Label htmlFor="maxvolume-level" className={cn("text-sm", !settings.audio.maxVolume.enabled && "text-muted-foreground/50")}>
                             Maximum Volume
                         </Label>
                         <div className={cn("relative w-24", !settings.audio.maxVolume.enabled && "opacity-50")}>
@@ -502,26 +493,26 @@ function GeneralSettings() {
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                         </div>
-                        <div className="col-span-3">
-                            <Slider
-                                value={[settings.audio.maxVolume.level]}
-                                onValueChange={(value) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value[0]}}}))}
-                                max={100}
-                                step={1}
-                                disabled={!settings.audio.maxVolume.enabled}
-                            />
-                        </div>
                      </div>
-                </CardContent>
-            </Card>
+                    <div className={cn(
+                        "col-span-3",
+                        !settings.audio.maxVolume.enabled && "opacity-50"
+                        )}>
+                        <Slider
+                            value={[settings.audio.maxVolume.level]}
+                            onValueChange={(value) => setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value[0]}}}))}
+                            max={100}
+                            step={1}
+                            disabled={!settings.audio.maxVolume.enabled}
+                        />
+                    </div>
+                </div>
+            </div>
 
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>App Settings</CardTitle>
-                    <CardDescription>Export or import your application settings.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex gap-4">
+            <div className="space-y-2">
+                <Label className="text-base font-semibold">App Settings</Label>
+                <p className="text-sm text-muted-foreground">Export or import your application settings.</p>
+                <div className="flex gap-4">
                     <Button onClick={exportSettings}>Export Settings</Button>
                     <Button variant="outline" onClick={() => fileInputRef.current?.click()}>Import Settings</Button>
                     <input
@@ -531,8 +522,8 @@ function GeneralSettings() {
                         accept="application/json"
                         className="hidden"
                         />
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     )
 }
