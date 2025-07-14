@@ -3,8 +3,6 @@
 import { useEffect } from 'react';
 import {
   Settings,
-  ListMusic,
-  Github,
   Music,
 } from 'lucide-react';
 import { useSoundCue } from '@/hooks/useSoundCue';
@@ -81,9 +79,6 @@ export default function SoundCueClient() {
       <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 md:px-6">
         <SoundCueLogo />
         <div className="flex items-center gap-2">
-           <a href="https://github.com/firebase/studio-extra-sauce/tree/main/sound-cue" target="_blank" rel="noopener noreferrer">
-            <Github className="h-6 w-6 text-muted-foreground hover:text-foreground transition-colors" />
-           </a>
         </div>
       </header>
       <main className="flex-1">
