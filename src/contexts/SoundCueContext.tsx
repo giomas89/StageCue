@@ -33,7 +33,7 @@ interface SoundCueContextType {
   isShuffled: boolean;
   toggleShuffle: () => void;
   settings: Settings;
-  setSettings: React.Dispatch<React.SetStateAction<Settings>>;
+  setSettings: (setter: React.SetStateAction<Settings>) => void;
   playTrack: (index: number, andPlay?: boolean) => void;
   togglePlayPause: () => void;
   playNext: (fromError?: boolean) => void;
@@ -147,10 +147,25 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   
   const volume = settings.audio.volume;
   const selectedAudioOutputId = settings.audio.outputId;
-
+  
   const setSettings = useCallback((setter: React.SetStateAction<Settings>) => {
     _setSettings(prevSettings => {
         const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
+        
+        // Handle max volume change side-effects
+        const oldMaxEnabled = prevSettings.audio.maxVolume.enabled;
+        const newMaxEnabled = newSettings.audio.maxVolume.enabled;
+        const newMaxLevel = newSettings.audio.maxVolume.level / 100;
+        
+        if (newMaxEnabled) {
+          if (!oldMaxEnabled || prevSettings.audio.maxVolume.level !== newSettings.audio.maxVolume.level) {
+             newSettings.audio.volume = Math.min(prevSettings.audio.volume, newMaxLevel);
+             if (audioRef.current) {
+                audioRef.current.volume = newSettings.audio.volume;
+             }
+          }
+        }
+        
         try {
             localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
         } catch (error) {
@@ -185,14 +200,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         return currentSettings;
     });
   }, [isMuted]);
-
-  // Effect to handle changes in maxVolume settings
-  useEffect(() => {
-    if (settings.audio.maxVolume.enabled && settings.audio.volume > settings.audio.maxVolume.level / 100) {
-      setVolume(settings.audio.maxVolume.level / 100);
-    }
-  }, [settings.audio.maxVolume.enabled, settings.audio.maxVolume.level, settings.audio.volume, setVolume]);
-
 
   const stopFade = () => {
     if (fadeIntervalRef.current) {

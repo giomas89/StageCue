@@ -110,6 +110,13 @@ function MidiSettings() {
                         )}
                     </SelectContent>
                     </Select>
+                     <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>Permissions</AlertTitle>
+                        <AlertDescription>
+                          If no devices are listed, you may need to grant MIDI permissions to this site in your browser settings.
+                        </AlertDescription>
+                    </Alert>
                 </CardContent>
             </Card>
         </TabsContent>
@@ -282,31 +289,28 @@ function OscSettings() {
 }
 
 function GeneralSettings() {
-    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput } = useSoundCue();
+    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput, setVolume, volume } = useSoundCue();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const [maxVolumeLevel, setMaxVolumeLevel] = useState(settings.audio.maxVolume.level);
-    
-     useEffect(() => {
-        setMaxVolumeLevel(settings.audio.maxVolume.level);
-    }, [settings.audio.maxVolume.level]);
 
     const handleMaxVolEnabledChange = (checked: boolean) => {
         setSettings(s => {
             const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}};
             if (checked) {
-              newSettings.audio.volume = newSettings.audio.maxVolume.level / 100;
+              setVolume(newSettings.audio.maxVolume.level / 100);
             }
             return newSettings;
         });
     };
     
-    const handleMaxVolValueChange = (value: number) => {
-        setMaxVolumeLevel(value);
-        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: value}}}));
+    const handleMaxVolValueChange = (value: number[]) => {
+        const newLevel = value[0];
+        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, level: newLevel}}}));
+        // If current volume is higher than the new max, adjust it down.
+        if (volume > newLevel / 100) {
+            setVolume(newLevel / 100);
+        }
     };
-
 
     const exportSettings = () => {
         const settingsJson = JSON.stringify(settings, null, 2);
@@ -438,8 +442,8 @@ function GeneralSettings() {
                                 min="0"
                                 max="100"
                                 step="1"
-                                value={maxVolumeLevel}
-                                onChange={(e) => handleMaxVolValueChange(Math.max(0, Math.min(100, Number(e.target.value))))}
+                                value={settings.audio.maxVolume.level}
+                                onChange={(e) => handleMaxVolValueChange([Math.max(0, Math.min(100, Number(e.target.value)))])}
                                 disabled={!settings.audio.maxVolume.enabled}
                                 className="pl-8 text-center"
                             />
@@ -448,8 +452,8 @@ function GeneralSettings() {
                      </div>
                     <div className={cn("col-span-3", !settings.audio.maxVolume.enabled && "opacity-50 pointer-events-none")}>
                         <Slider
-                            value={[maxVolumeLevel]}
-                            onValueChange={(value) => handleMaxVolValueChange(value[0])}
+                            value={[settings.audio.maxVolume.level]}
+                            onValueChange={handleMaxVolValueChange}
                             max={100}
                             step={1}
                             disabled={!settings.audio.maxVolume.enabled}
@@ -497,5 +501,3 @@ export default function SettingsPanel() {
     </Tabs>
   );
 }
-
-    
