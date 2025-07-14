@@ -52,7 +52,7 @@ const defaultSettings: Settings = {
       inputId: null,
       mappings: {
         togglePlayPause: 60, // C4
-        stopPlayback: 57, // A3
+        stopPlayback: 50, // D3
         playNext: 62, // D4
         playPrev: 59, // B3
         skipForward: 64, // E4
@@ -134,15 +134,16 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    audioRef.current = new Audio();
+    if (!audioRef.current) {
+        audioRef.current = new Audio();
+    }
+    const audio = audioRef.current;
+    
     getAudioOutputs();
     
-    // Set initial audio output from loaded settings
     if (settings.audio.outputId) {
         setAudioOutput(settings.audio.outputId);
     }
-
-    const audio = audioRef.current;
     
     const handleTimeUpdate = () => {
       if (!audio) return;
@@ -163,12 +164,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         }
     }
     
-    const handleError = () => {
-        toast({
-            variant: "destructive",
-            title: "Playback Error",
-            description: "Could not play the selected audio file."
-        });
+    const handleError = (e: any) => {
+        if (audio?.src) {
+             toast({
+                variant: "destructive",
+                title: "Playback Error",
+                description: `Could not play the audio file. Error: ${e.message || 'Unknown error'}`
+            });
+        }
+       
         setIsPlaying(false);
         isPlayingRef.current = false;
     }
@@ -201,7 +205,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       if (audioRef.current.src !== trackToPlay.url) {
         audioRef.current.src = trackToPlay.url;
         audioRef.current.load();
-      } else if (andPlay) {
+      }
+
+      if (andPlay) {
          audioRef.current.play().catch(e => {
             console.error("Playback failed on re-play", e);
             setIsPlaying(false);
@@ -218,6 +224,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     _setQueue(newQueue);
 
     if (wasEmpty && newQueue.length > 0) {
+      // Defer this call to ensure the state update has propagated and `currentQueue` is up-to-date
       setTimeout(() => playTrack(0, false), 0);
     }
   };
