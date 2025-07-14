@@ -20,6 +20,7 @@ interface SoundCueContextType {
   currentTrack: Track | null;
   isPlaying: boolean;
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
+  isFading: boolean;
   progress: number;
   duration: number;
   volume: number;
@@ -99,6 +100,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [shuffledQueue, setShuffledQueue] = useState<Track[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isFading, setIsFading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setInternalVolume] = useState(1);
@@ -151,12 +153,14 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (fadeIntervalRef.current) {
         clearInterval(fadeIntervalRef.current);
         fadeIntervalRef.current = null;
+        setIsFading(false);
     }
   }
 
   const fadeOutAnd = (callback: () => void) => {
     stopFade();
     if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
+      setIsFading(true);
       const audio = audioRef.current;
       const startVolume = isMuted ? 0 : volume;
       const step = startVolume / (settings.audio.fadeOut.duration * 20); // 50ms steps
@@ -178,6 +182,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const fadeIn = () => {
       stopFade();
       if (settings.audio.fadeIn.enabled && settings.audio.fadeIn.duration > 0 && audioRef.current) {
+        setIsFading(true);
         const audio = audioRef.current;
         const targetVolume = isMuted ? 0 : volume;
         audio.volume = 0;
@@ -248,9 +253,12 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         const error = (e.target as HTMLAudioElement).error;
         if (audio?.src && error) {
             let errorMsg = `Could not play the audio file. Code: ${error.code}, Message: ${error.message}`;
-            if (error.code === MediaError.MEDIA_ERR_DECODE || error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+             if (error.code === MediaError.MEDIA_ERR_DECODE || error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
                  errorMsg = `The audio file might be corrupt or in an unsupported format.`;
+            } else if (error.code === MediaError.MEDIA_ERR_ABORTED) {
+                 errorMsg = `Playback was aborted.`;
             }
+            
             toast({
                 variant: "destructive",
                 title: "Playback Error",
@@ -285,8 +293,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audioRef.current.src = trackToPlay.url;
       audioRef.current.load();
       if (andPlay) {
+        setIsPlaying(true);
         audioRef.current.play().then(() => {
-          setIsPlaying(true);
           fadeIn();
         }).catch(e => {
           console.error("Playback failed on playTrack", e);
@@ -327,6 +335,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(newIndex !== -1) {
             setCurrentTrackIndex(newIndex);
         } else if (newQueue.length > 0) {
+            playTrack(0, false);
             setCurrentTrackIndex(0);
         } else {
             setCurrentTrackIndex(null);
@@ -382,14 +391,14 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         return;
     };
     if (isPlaying) {
+      setIsPlaying(false); // Immediate feedback
       fadeOutAnd(() => {
         audioRef.current?.pause();
-        setIsPlaying(false);
       });
     } else {
       if (audioRef.current) {
+          setIsPlaying(true);
           audioRef.current.play().then(() => {
-            setIsPlaying(true);
             fadeIn();
           }).catch(e => {
               console.error("Playback failed on toggle", e);
@@ -400,11 +409,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }, [isPlaying, currentTrack, currentQueue, playTrack]);
 
   const stopPlayback = useCallback(() => {
+    setIsPlaying(false);
     fadeOutAnd(() => {
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            setIsPlaying(false);
         }
     })
   }, []);
@@ -508,6 +517,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     currentTrack,
     isPlaying,
     setIsPlaying,
+    isFading,
     progress,
     duration,
     volume,
