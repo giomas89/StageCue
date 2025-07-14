@@ -126,8 +126,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
 
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>(null);
-
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
@@ -143,79 +142,57 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     // Hydration-safe settings load
     const loadedSettings = loadSettings();
     _setSettings(loadedSettings);
-    setSelectedAudioOutputId(loadedSettings.audio.outputId);
     setIsHydrated(true);
   }, []);
-
+  
   const volume = settings.audio.volume;
-  
-  const setVolume = (vol: number) => {
-      let newVol = vol;
-      if (settings.audio.maxVolume.enabled) {
-          newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
-      }
-      
-      if (audioRef.current) {
-          stopFade();
-          audioRef.current.volume = newVol;
-      }
-  
-      if (newVol > 0 && isMuted) {
-        setIsMuted(false);
-        if(audioRef.current) audioRef.current.muted = false;
-      }
-  
-      _setSettings(s => {
-        if (s.audio.volume === newVol) return s;
-        return {...s, audio: {...s.audio, volume: newVol}};
-      });
-    }
+  const selectedAudioOutputId = settings.audio.outputId;
 
   const setSettings = useCallback((setter: React.SetStateAction<Settings>) => {
     _setSettings(prevSettings => {
         const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
-
         try {
             localStorage.setItem('soundcue-settings', JSON.stringify(newSettings));
         } catch (error) {
              console.error("Failed to save settings to localStorage", error);
         }
-        
-        // When max volume settings change, adjust current volume if needed
-        if (newSettings.audio.maxVolume.enabled && newSettings.audio.volume > newSettings.audio.maxVolume.level / 100) {
-            const adjustedVolume = newSettings.audio.maxVolume.level / 100;
-             if (audioRef.current) {
-                audioRef.current.volume = adjustedVolume;
-            }
-            return {
-                ...newSettings,
-                audio: {
-                    ...newSettings.audio,
-                    volume: adjustedVolume,
-                },
-            };
-        } else if (newSettings.audio.maxVolume.enabled) {
-            const adjustedVolume = newSettings.audio.maxVolume.level / 100;
-             if (audioRef.current) {
-                audioRef.current.volume = adjustedVolume;
-            }
-             return {
-                ...newSettings,
-                audio: {
-                    ...newSettings.audio,
-                    volume: adjustedVolume,
-                },
-            };
-        }
-
-
-        if (audioRef.current && audioRef.current.volume !== newSettings.audio.volume) {
-          audioRef.current.volume = newSettings.audio.volume;
-        }
-
         return newSettings;
     });
   }, []);
+
+  const setVolume = useCallback((newVol: number) => {
+    let finalVol = newVol;
+    
+    // Use a functional update to get the latest settings without depending on the settings object
+    _setSettings(currentSettings => {
+        if (currentSettings.audio.maxVolume.enabled) {
+            finalVol = Math.min(newVol, currentSettings.audio.maxVolume.level / 100);
+        }
+
+        if (audioRef.current) {
+            audioRef.current.volume = finalVol;
+        }
+
+        if (finalVol > 0 && isMuted) {
+            setIsMuted(false);
+            if(audioRef.current) audioRef.current.muted = false;
+        }
+
+        // Only update settings if the volume value has actually changed
+        if (currentSettings.audio.volume !== finalVol) {
+            return {...currentSettings, audio: {...currentSettings.audio, volume: finalVol}};
+        }
+        return currentSettings;
+    });
+  }, [isMuted]);
+
+  // Effect to handle changes in maxVolume settings
+  useEffect(() => {
+    if (settings.audio.maxVolume.enabled && settings.audio.volume > settings.audio.maxVolume.level / 100) {
+      setVolume(settings.audio.maxVolume.level / 100);
+    }
+  }, [settings.audio.maxVolume.enabled, settings.audio.maxVolume.level, settings.audio.volume, setVolume]);
+
 
   const stopFade = () => {
     if (fadeIntervalRef.current) {
