@@ -20,6 +20,13 @@ import {
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 
+const formatDuration = (seconds: number | undefined) => {
+    if (seconds === undefined || isNaN(seconds)) return '--:--';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+};
+
 export default function Queue() {
   const { queue, setQueue, currentTrackIndex, playTrack, clearQueue } = useSoundCue();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,20 +49,32 @@ export default function Queue() {
           file,
           url: URL.createObjectURL(file),
         }));
+      
+      const existingIds = new Set(queue.map(t => t.id));
+      const uniqueNewTracks = newTracks.filter(t => !existingIds.has(t.id));
 
-      setQueue(prevQueue => {
-        const existingIds = new Set(prevQueue.map(t => t.id));
-        const uniqueNewTracks = newTracks.filter(t => !existingIds.has(t.id));
+      if (uniqueNewTracks.length < newTracks.length) {
+          toast({ variant: "default", title: "Duplicate tracks skipped", description: "Some tracks were already in the queue." });
+      }
 
-        if (uniqueNewTracks.length < newTracks.length) {
-            toast({ variant: "default", title: "Duplicate tracks skipped", description: "Some tracks were already in the queue." });
-        }
+      if (uniqueNewTracks.length > 0) {
+           toast({ title: "Tracks added", description: `${uniqueNewTracks.length} tracks added to the queue.` });
+      } else {
+        return;
+      }
+      
+      setQueue(prevQueue => [...prevQueue, ...uniqueNewTracks]);
 
-        if (uniqueNewTracks.length > 0) {
-             toast({ title: "Tracks added", description: `${uniqueNewTracks.length} tracks added to the queue.` });
-        }
-        
-        return [...prevQueue, ...uniqueNewTracks];
+      // Get duration for new tracks
+      uniqueNewTracks.forEach(track => {
+        const audio = new Audio(track.url);
+        audio.onloadedmetadata = () => {
+          setQueue(prevQueue => {
+            return prevQueue.map(t => 
+              t.id === track.id ? { ...t, duration: audio.duration } : t
+            );
+          });
+        };
       });
     }
   };
@@ -171,7 +190,11 @@ export default function Queue() {
                   index === currentTrackIndex && 'bg-primary/20 text-primary-foreground'
                 )}
               >
-                <span className="font-medium">{index + 1}. {track.name}</span>
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
+                    <span className="font-medium">{track.name}</span>
+                </div>
+                <span className="text-sm text-muted-foreground">{formatDuration(track.duration)}</span>
               </li>
             ))}
           </ul>

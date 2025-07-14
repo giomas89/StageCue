@@ -3,6 +3,7 @@ export interface Track {
   name: string;
   url: string;
   file: File;
+  duration?: number;
 }
 
 export type RepeatMode = 'none' | 'one' | 'all';

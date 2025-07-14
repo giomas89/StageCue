@@ -127,7 +127,7 @@ function MidiSettings() {
     }
   }, [selectedInputId, midiInputs, settings.midi.mappings, setSettings, learningCommand, toast, midiCommandActions, playTrack]);
   
-  const formatMidiNote = (note: number | null) => {
+  const formatMidiNote = (note: number | null | undefined) => {
     if (note === null || note === undefined) return 'N/A';
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const octave = Math.floor(note / 12) - 1;
@@ -270,12 +270,31 @@ function OscSettings() {
     ];
 
     return (
-        <Tabs defaultValue="mapping" className="w-full">
+        <Tabs defaultValue="config" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="mapping">Mapping</TabsTrigger>
                 <TabsTrigger value="config">Configuration</TabsTrigger>
+                <TabsTrigger value="mapping">Mapping</TabsTrigger>
                 <TabsTrigger value="monitor">Monitor</TabsTrigger>
             </TabsList>
+             <TabsContent value="config" className="mt-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>OSC Configuration</CardTitle>
+                        <CardDescription>Configure the connection to your OSC bridge application (UI is for demonstration).</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="osc-ip">OSC Bridge IP Address</Label>
+                            <Input id="osc-ip" placeholder="e.g., 127.0.0.1" defaultValue="127.0.0.1" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="osc-port">OSC Bridge Port</Label>
+                            <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
+                        </div>
+                        <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
+                    </CardContent>
+                </Card>
+            </TabsContent>
             <TabsContent value="mapping" className="mt-4">
                  <Card>
                     <CardHeader>
@@ -301,25 +320,6 @@ function OscSettings() {
                                 ))}
                             </TableBody>
                         </Table>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            <TabsContent value="config" className="mt-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>OSC Configuration</CardTitle>
-                        <CardDescription>Configure the connection to your OSC bridge application (UI is for demonstration).</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="osc-ip">OSC Bridge IP Address</Label>
-                            <Input id="osc-ip" placeholder="e.g., 127.0.0.1" defaultValue="127.0.0.1" />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="osc-port">OSC Bridge Port</Label>
-                            <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
-                        </div>
-                        <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
                     </CardContent>
                 </Card>
             </TabsContent>
