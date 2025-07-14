@@ -16,6 +16,14 @@ export type MidiCommand =
   | 'skipForward'
   | 'skipBackward';
 
+export interface MidiMessage {
+  command: number;
+  note: number;
+  velocity: number;
+  timestamp: number;
+  type: 'Note On' | 'Note Off' | 'Control Change' | 'Unknown';
+}
+  
 export interface Settings {
   midi: {
     inputId: string | null;
@@ -38,6 +46,7 @@ export interface Settings {
     maxVolume: {
       enabled: boolean;
       level: number;
-    }
+    },
+    volume: number;
   }
 }

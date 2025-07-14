@@ -18,20 +18,12 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Info, Timer, Volume2 } from 'lucide-react';
-
-interface MidiMessage {
-  command: number;
-  note: number;
-  velocity: number;
-  timestamp: number;
-  type: 'Note On' | 'Note Off' | 'Control Change' | 'Unknown';
-}
 
 const COMMAND_LABELS: Record<MidiCommand, string> = {
     togglePlayPause: 'Play / Pause',
@@ -53,95 +45,42 @@ const COMMAND_ORDER: MidiCommand[] = [
 
 
 function MidiSettings() {
-  const { settings, setSettings, playTrack, togglePlayPause, playNext, playPrev, stopPlayback, skipForward, skipBackward } = useSoundCue();
-  const [midiInputs, setMidiInputs] = useState<WebMidi.MIDIInput[]>([]);
-  const [lastMessages, setLastMessages] = useState<MidiMessage[]>([]);
-  const [learningCommand, setLearningCommand] = useState<MidiCommand | null>(null);
+  const { 
+    settings, 
+    setSettings, 
+    midiInputs, 
+    lastMidiMessage, 
+    learningCommand, 
+    setLearningCommand,
+    selectMidiInput
+  } = useSoundCue();
+  
   const { toast } = useToast();
 
   const selectedInputId = settings.midi.inputId;
-
-  const handleSelectMidiInput = (id: string) => {
-    if (id === 'no-devices') return;
-    setSettings(s => ({...s, midi: {...s.midi, inputId: id}}));
-  };
-  
-  const midiCommandActions: Record<MidiCommand, () => void> = {
-    togglePlayPause,
-    playNext,
-    playPrev,
-    stopPlayback,
-    skipForward,
-    skipBackward,
-  };
+  const [lastMessages, setLastMessages] = useState<(typeof lastMidiMessage)[]>([]);
 
   useEffect(() => {
-    const requestMidi = async () => {
-        try {
-            if (navigator.requestMIDIAccess) {
-                const midiAccess = await navigator.requestMIDIAccess();
-                const inputs = Array.from(midiAccess.inputs.values());
-                setMidiInputs(inputs);
-            }
-        } catch(e) {
-            console.error("Could not access your MIDI devices.", e);
-            toast({ variant: "destructive", title: "MIDI Error", description: "Could not access MIDI devices." });
-        }
+    if (lastMidiMessage) {
+        setLastMessages(prev => [lastMidiMessage, ...prev.slice(0, 49)]);
     }
-    requestMidi();
-  }, [toast]);
-
-  useEffect(() => {
-    midiInputs.forEach(input => {
-      input.onmidimessage = null;
-    });
-
-    const selectedInput = midiInputs.find(input => input.id === selectedInputId);
-
-    if (selectedInput) {
-      const handleMidiMessage = (event: WebMidi.MIDIMessageEvent) => {
-        const [command, note, velocity] = event.data;
-        
-        let type: MidiMessage['type'] = 'Unknown';
-        if (command >= 144 && command <= 159) type = 'Note On';
-        else if (command >= 128 && command <= 143) type = 'Note Off';
-        else if (command >= 176 && command <= 191) type = 'Control Change';
-
-        const newMessage: MidiMessage = { command, note, velocity, timestamp: event.timeStamp, type };
-        setLastMessages(prev => [newMessage, ...prev.slice(0, 49)]);
-        
-        if (type === 'Note On' && velocity > 0) {
-            if (learningCommand) {
-                setSettings(s => ({
-                    ...s,
-                    midi: {
-                        ...s.midi,
-                        mappings: { ...s.midi.mappings, [learningCommand]: note }
-                    }
-                }));
-                toast({ title: "MIDI Learned", description: `Assigned Note ${note} to ${COMMAND_LABELS[learningCommand]}`});
-                setLearningCommand(null);
-            } else {
-                const commandToTrigger = (Object.keys(settings.midi.mappings) as MidiCommand[]).find(
-                    cmd => settings.midi.mappings[cmd] === note
-                );
-
-                if(commandToTrigger) {
-                    const action = midiCommandActions[commandToTrigger];
-                    if (action) action();
-                }
-            }
-        }
-      };
-      
-      selectedInput.onmidimessage = handleMidiMessage;
-      
-      return () => {
-        if(selectedInput) selectedInput.onmidimessage = null;
-      };
-    }
-  }, [selectedInputId, midiInputs, settings.midi.mappings, setSettings, learningCommand, toast, midiCommandActions, playTrack]);
+  }, [lastMidiMessage]);
   
+  useEffect(() => {
+    if (learningCommand && lastMidiMessage?.type === 'Note On' && lastMidiMessage.velocity > 0) {
+        const note = lastMidiMessage.note;
+        setSettings(s => ({
+            ...s,
+            midi: {
+                ...s.midi,
+                mappings: { ...s.midi.mappings, [learningCommand]: note }
+            }
+        }));
+        toast({ title: "MIDI Learned", description: `Assigned Note ${note} to ${COMMAND_LABELS[learningCommand]}`});
+        setLearningCommand(null);
+    }
+  }, [learningCommand, lastMidiMessage, setSettings, toast, setLearningCommand]);
+
   const formatMidiNote = (note: number | null | undefined) => {
     if (note === null || note === undefined) return 'N/A';
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -149,6 +88,11 @@ function MidiSettings() {
     const name = noteNames[note % 12];
     return `${name}${octave} (${note})`;
   }
+  
+  const handleSelectMidiInput = (id: string) => {
+    if (id === 'no-devices') return;
+    selectMidiInput(id);
+  };
 
   return (
     <Tabs defaultValue="config" className="w-full">
@@ -231,7 +175,7 @@ function MidiSettings() {
                     <ScrollArea className="h-48 w-full rounded-md border">
                         <div className="p-4 font-mono text-xs">
                         {lastMessages.length > 0 ? (
-                            lastMessages.map((msg, index) => (
+                            lastMessages.map((msg, index) => msg && (
                                 <p key={`${msg.timestamp}-${index}`}>
                                     <span className="text-muted-foreground">[{msg.type}]</span>{' '}
                                     Cmd: {msg.command}, Note: {msg.note}, Vel: {msg.velocity}
@@ -363,7 +307,15 @@ function GeneralSettings() {
     }, [settings.audio.maxVolume.level]);
 
     const handleMaxVolEnabledChange = (checked: boolean) => {
-        setSettings(s => ({...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}}));
+        setSettings(s => {
+            const newSettings = {...s, audio: {...s.audio, maxVolume: {...s.audio.maxVolume, enabled: checked }}};
+            if (checked) {
+              if(s.audio.volume > newSettings.audio.maxVolume.level / 100) {
+                 newSettings.audio.volume = newSettings.audio.maxVolume.level / 100;
+              }
+            }
+            return newSettings;
+        });
     };
     
     const handleMaxVolValueChange = (value: number) => {

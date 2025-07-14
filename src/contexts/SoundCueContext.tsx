@@ -9,7 +9,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import type { Track, Settings, RepeatMode } from '@/types';
+import type { Track, Settings, RepeatMode, MidiMessage, MidiCommand } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface SoundCueContextType {
@@ -47,6 +47,11 @@ interface SoundCueContextType {
   selectedAudioOutputId: string | null;
   setAudioOutput: (deviceId: string) => void;
   reorderQueue: (startIndex: number, endIndex: number) => void;
+  midiInputs: WebMidi.MIDIInput[];
+  lastMidiMessage: MidiMessage | null;
+  learningCommand: MidiCommand | null;
+  setLearningCommand: React.Dispatch<React.SetStateAction<MidiCommand | null>>;
+  selectMidiInput: (id: string) => void;
 }
 
 export const SoundCueContext = createContext<SoundCueContextType | undefined>(undefined);
@@ -69,6 +74,7 @@ const defaultSettings: Settings = {
       fadeIn: { enabled: false, duration: 2 },
       fadeOut: { enabled: false, duration: 2 },
       maxVolume: { enabled: false, level: 100 },
+      volume: 1,
     }
 };
 
@@ -112,7 +118,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [fadeCountdown, setFadeCountdown] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setInternalVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
@@ -126,13 +131,20 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  // MIDI state
+  const [midiInputs, setMidiInputs] = useState<WebMidi.MIDIInput[]>([]);
+  const [lastMidiMessage, setLastMidiMessage] = useState<MidiMessage | null>(null);
+  const [learningCommand, setLearningCommand] = useState<MidiCommand | null>(null);
   
   const currentQueue = isShuffled ? shuffledQueue : queue;
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
 
   useEffect(() => {
     // Hydration-safe settings load
-    _setSettings(loadSettings());
+    const loadedSettings = loadSettings();
+    _setSettings(loadedSettings);
+    setSelectedAudioOutputId(loadedSettings.audio.outputId);
     setIsHydrated(true);
   }, []);
   
@@ -145,19 +157,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setFadeCountdown(null);
   }
 
-  const setVolume = (vol: number) => {
-    let newVol = vol;
-    if (settings.audio.maxVolume.enabled) {
-      newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
-    }
-    setInternalVolume(newVol);
-    if (audioRef.current) {
-        stopFade();
-        audioRef.current.volume = newVol;
-    }
-    if(newVol > 0 && isMuted) setIsMuted(false);
-  }
-
   const setSettings = (setter: React.SetStateAction<Settings>) => {
     _setSettings(prevSettings => {
         const newSettings = typeof setter === 'function' ? setter(prevSettings) : setter;
@@ -168,26 +167,47 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         } catch (error) {
              console.error("Failed to save settings to localStorage", error);
         }
+        
+        const currentVolume = prevSettings.audio.volume;
+        let finalVolume = newSettings.audio.volume;
 
-        const maxVol = newSettings.audio.maxVolume.level / 100;
-        const maxVolJustEnabled = newSettings.audio.maxVolume.enabled && !prevSettings.audio.maxVolume.enabled;
-
-        if (maxVolJustEnabled) {
-          setVolume(maxVol);
-        } else if (newSettings.audio.maxVolume.enabled && volume > maxVol) {
-          setVolume(maxVol);
+        if (newSettings.audio.maxVolume.enabled) {
+          const maxVol = newSettings.audio.maxVolume.level / 100;
+          if (finalVolume > maxVol) {
+            finalVolume = maxVol;
+          }
         }
         
+        if (audioRef.current && finalVolume !== currentVolume) {
+            audioRef.current.volume = finalVolume;
+        }
+
+        newSettings.audio.volume = finalVolume;
         return newSettings;
     });
   };
 
-  useEffect(() => {
-    if (isHydrated) {
-        setSettings(loadSettings());
-    }
-  }, [isHydrated]);
+  const volume = settings.audio.volume;
 
+  const setVolume = (vol: number) => {
+    let newVol = vol;
+    if (settings.audio.maxVolume.enabled) {
+      newVol = Math.min(vol, settings.audio.maxVolume.level / 100);
+    }
+    
+    if (audioRef.current) {
+        stopFade();
+        audioRef.current.volume = newVol;
+    }
+
+    if (newVol > 0 && isMuted) {
+      setIsMuted(false);
+      if(audioRef.current) audioRef.current.muted = false;
+    }
+
+    setSettings(s => ({...s, audio: {...s.audio, volume: newVol}}));
+  }
+  
   const getAudioOutputs = useCallback(async () => {
     try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -200,7 +220,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         console.error("Error enumerating audio devices:", err);
     }
   }, []);
-  
+
   const fadeOutAnd = useCallback((callback: () => void) => {
     stopFade();
     if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
@@ -327,6 +347,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!audioRef.current) {
         audioRef.current = new Audio();
+        audioRef.current.volume = settings.audio.volume;
     }
     const audio = audioRef.current;
     
@@ -394,7 +415,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack]);
+  }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack, settings.audio.volume]);
   
   const setQueue = (setter: React.SetStateAction<Track[]>) => {
     _setQueue(currentQueue => {
@@ -585,7 +606,79 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       }
     }
   };
+  
+  // MIDI Logic
+  const midiCommandActions: Record<MidiCommand, () => void> = {
+    togglePlayPause,
+    playNext,
+    playPrev,
+    stopPlayback,
+    skipForward,
+    skipBackward,
+  };
 
+  useEffect(() => {
+    const requestMidi = async () => {
+        try {
+            if (navigator.requestMIDIAccess) {
+                const midiAccess = await navigator.requestMIDIAccess();
+                const inputs = Array.from(midiAccess.inputs.values());
+                setMidiInputs(inputs);
+            }
+        } catch(e) {
+            console.error("Could not access your MIDI devices.", e);
+            toast({ variant: "destructive", title: "MIDI Error", description: "Could not access MIDI devices." });
+        }
+    }
+    requestMidi();
+  }, [toast]);
+  
+  const selectMidiInput = (id: string) => {
+    setSettings(s => ({...s, midi: {...s.midi, inputId: id}}));
+  };
+  
+  useEffect(() => {
+    const selectedInput = midiInputs.find(input => input.id === settings.midi.inputId);
+
+    // Detach all existing listeners
+    midiInputs.forEach(input => {
+      input.onmidimessage = null;
+    });
+
+    if (selectedInput) {
+      const handleMidiMessage = (event: WebMidi.MIDIMessageEvent) => {
+        const [command, note, velocity] = event.data;
+        
+        let type: MidiMessage['type'] = 'Unknown';
+        if (command >= 144 && command <= 159) type = 'Note On';
+        else if (command >= 128 && command <= 143) type = 'Note Off';
+        else if (command >= 176 && command <= 191) type = 'Control Change';
+
+        const newMessage: MidiMessage = { command, note, velocity, timestamp: event.timeStamp, type };
+        setLastMidiMessage(newMessage);
+        
+        if (type === 'Note On' && velocity > 0) {
+            // Learning mode is handled in Settings component
+            if (learningCommand) return;
+            
+            const commandToTrigger = (Object.keys(settings.midi.mappings) as MidiCommand[]).find(
+                cmd => settings.midi.mappings[cmd] === note
+            );
+
+            if(commandToTrigger) {
+                const action = midiCommandActions[commandToTrigger];
+                if (action) action();
+            }
+        }
+      };
+      
+      selectedInput.onmidimessage = handleMidiMessage;
+      
+      return () => {
+        if(selectedInput) selectedInput.onmidimessage = null;
+      };
+    }
+  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, midiCommandActions]);
 
   if (!isHydrated) {
     return null; // or a loading spinner
@@ -625,7 +718,12 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     audioOutputs,
     selectedAudioOutputId,
     setAudioOutput,
-    reorderQueue
+    reorderQueue,
+    midiInputs,
+    lastMidiMessage,
+    learningCommand,
+    setLearningCommand,
+    selectMidiInput
   };
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
