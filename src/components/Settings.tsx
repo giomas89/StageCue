@@ -335,7 +335,7 @@ function OscSettings() {
                 <Card>
                     <CardHeader>
                         <CardTitle>OSC Monitor</CardTitle>
-                    </Header>
+                    </CardHeader>
                     <CardContent>
                          <Alert>
                           <Info className="h-4 w-4" />

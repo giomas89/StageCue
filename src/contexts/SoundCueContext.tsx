@@ -136,6 +136,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setIsHydrated(true);
   }, []);
   
+  const stopFade = () => {
+    if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+    }
+    setIsFading(false);
+    setFadeCountdown(null);
+  }
+
   const setVolume = (vol: number) => {
     let newVol = vol;
     if (settings.audio.maxVolume.enabled) {
@@ -192,15 +201,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  const stopFade = () => {
-    if (fadeIntervalRef.current) {
-        clearInterval(fadeIntervalRef.current);
-        fadeIntervalRef.current = null;
-    }
-    setIsFading(false);
-    setFadeCountdown(null);
-  }
-
   const fadeOutAnd = useCallback((callback: () => void) => {
     stopFade();
     if (settings.audio.fadeOut.enabled && settings.audio.fadeOut.duration > 0 && audioRef.current) {
@@ -257,7 +257,24 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
           audioRef.current.volume = isMuted ? 0 : volume;
       }
   }, [settings.audio.fadeIn, isMuted, volume]);
-  
+
+  const stopPlayback = useCallback((fade = true) => {
+    const stopAction = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setIsPlaying(false);
+    };
+
+    if (fade && isPlaying) {
+      fadeOutAnd(stopAction);
+    } else {
+      stopFade();
+      stopAction();
+    }
+  }, [fadeOutAnd, isPlaying]);
+
   const playTrack = useCallback((index: number, andPlay = true) => {
     stopFade();
     const trackToPlay = currentQueue[index];
@@ -284,7 +301,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             });
         }
     }
-}, [currentQueue, fadeIn, toast]);
+  }, [currentQueue, fadeIn, toast]);
 
  const playNext = useCallback((fromError: boolean = false) => {
     if (currentTrackIndex === null) return;
@@ -443,23 +460,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     }
   }, [toast, setSettings]);
   
-  const stopPlayback = useCallback((fade = true) => {
-    const stopAction = () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-      setIsPlaying(false);
-    };
-
-    if (fade && isPlaying) {
-      fadeOutAnd(stopAction);
-    } else {
-      stopFade();
-      stopAction();
-    }
-  }, [fadeOutAnd, isPlaying]);
-
   const toggleMute = () => {
       const newMuteState = !isMuted;
       setIsMuted(newMuteState);
