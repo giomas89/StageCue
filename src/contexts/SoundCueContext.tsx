@@ -152,11 +152,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const selectedAudioOutputId = audioSettings.outputId;
 
   const setSettings = useCallback((arg: React.SetStateAction<Settings>) => {
-    _setSettings(arg)
+    _setSettings(prev => typeof arg === 'function' ? arg(prev) : arg);
   }, []);
 
   const setAudioSettings = useCallback((arg: React.SetStateAction<AudioSettings>) => {
-    _setAudioSettings(arg)
+    _setAudioSettings(prev => typeof arg === 'function' ? arg(prev) : arg);
   }, []);
 
   const setVolume = useCallback((arg: React.SetStateAction<number>) => {
@@ -196,11 +196,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { settings: loadedSettings, audioSettings: loadedAudioSettings, volume: loadedVolume, isMuted: loadedIsMuted } = loadInitialState();
     setSettings(loadedSettings);
-    _setAudioSettings(loadedAudioSettings);
-    _setVolume(loadedVolume);
-    _setIsMuted(loadedIsMuted);
+    setAudioSettings(loadedAudioSettings);
+    setVolume(loadedVolume);
+    setIsMuted(loadedIsMuted);
     setIsHydrated(true);
-  }, [setSettings]);
+  }, [setSettings, setAudioSettings, setVolume, setIsMuted]);
   
   useEffect(() => {
     if (isHydrated) {
@@ -242,7 +242,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioOutputs(outputs);
-    } catch (err) => {
+    } catch (err) {
         console.error("Error enumerating audio devices:", err);
     }
   }, []);
@@ -478,6 +478,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       }
       if(queue.length === 0) {
         setSelectedIndex(null);
+        setCurrentTrackIndex(null);
       }
   }, [queue, currentTrackIndex, playTrack]);
   
@@ -700,12 +701,21 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if (newCurrentIndex !== -1) {
             setCurrentTrackIndex(newCurrentIndex);
         }
+    } else if (currentTrackIndex !== null) {
+        // Handle case where track was playing but is now out of bounds (less likely with this logic but safe)
+        if (currentTrackIndex >= newQueue.length) {
+            setCurrentTrackIndex(newQueue.length -1);
+        }
     }
     
     if (selectedId) {
         const newSelectedIndex = newQueue.findIndex(t => t.id === selectedId);
         if (newSelectedIndex !== -1) {
             setSelectedIndex(newSelectedIndex);
+        }
+    } else if (selectedIndex !== null) {
+        if(selectedIndex >= newQueue.length) {
+           setSelectedIndex(newQueue.length -1);
         }
     }
   }, [queue, isShuffled, toast, currentTrack, selectedIndex]);
@@ -796,7 +806,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(selectedInput) selectedInput.onmidimessage = null;
       };
     }
-  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions, setSettings]);
+  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, toast, setSettings, midiCommandActions]);
 
 
   if (!isHydrated) {
