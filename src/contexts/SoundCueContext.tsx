@@ -156,8 +156,24 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         } catch (error) {
              console.error("Failed to save settings to localStorage", error);
         }
+        
+        // When max volume settings change, adjust current volume if needed
+        if (newSettings.audio.maxVolume.enabled && newSettings.audio.volume > newSettings.audio.maxVolume.level / 100) {
+            const adjustedVolume = newSettings.audio.maxVolume.level / 100;
+            if (audioRef.current) {
+                audioRef.current.volume = adjustedVolume;
+            }
+            // Return updated settings with adjusted volume
+            return {
+                ...newSettings,
+                audio: {
+                    ...newSettings.audio,
+                    volume: adjustedVolume,
+                },
+            };
+        }
 
-        if (audioRef.current) {
+        if (audioRef.current && audioRef.current.volume !== newSettings.audio.volume) {
           audioRef.current.volume = newSettings.audio.volume;
         }
 
@@ -192,7 +208,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       if(audioRef.current) audioRef.current.muted = false;
     }
 
-    setSettings(s => ({...s, audio: {...s.audio, volume: newVol}}));
+    // Only update the volume part of the settings, don't trigger a full 'setSettings' call
+    _setSettings(s => ({...s, audio: {...s.audio, volume: newVol}}));
   }
   
   const getAudioOutputs = useCallback(async () => {
@@ -597,11 +614,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     togglePlayPause,
     playNext,
     playPrev,
-    stopPlayback,
+    stopPlayback: () => stopPlayback(),
     skipForward,
     skipBackward,
   };
 
+  const selectMidiInput = (id: string) => {
+    setSettings(s => ({...s, midi: {...s.midi, inputId: id}}));
+  };
+  
   useEffect(() => {
     const requestMidi = async () => {
         try {
@@ -612,21 +633,25 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
             }
         } catch(e) {
             console.error("Could not access your MIDI devices.", e);
-            toast({ variant: "destructive", title: "MIDI Error", description: "Could not access MIDI devices." });
+            if (e instanceof Error && e.name === 'SecurityError') {
+                 toast({ variant: "destructive", title: "MIDI Permissions", description: "MIDI access is disabled by a permissions policy." });
+            } else {
+                 toast({ variant: "destructive", title: "MIDI Error", description: "Could not access MIDI devices." });
+            }
         }
     }
     requestMidi();
   }, [toast]);
   
-  const selectMidiInput = (id: string) => {
-    setSettings(s => ({...s, midi: {...s.midi, inputId: id}}));
-  };
   
   useEffect(() => {
     const selectedInput = midiInputs.find(input => input.id === settings.midi.inputId);
 
     midiInputs.forEach(input => {
-      input.onmidimessage = null;
+      // Clear any previous listeners
+      if (input.onmidimessage) {
+        input.onmidimessage = null;
+      }
     });
 
     if (selectedInput) {
@@ -672,7 +697,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(selectedInput) selectedInput.onmidimessage = null;
       };
     }
-  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, midiCommandActions, toast, setSettings]);
+  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, setSettings, toast, midiCommandActions]);
 
 
   if (!isHydrated) {
@@ -705,7 +730,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     togglePlayPause,
     playNext,
     playPrev,
-    stopPlayback,
+    stopPlayback: () => stopPlayback(),
     clearQueue,
     seek,
     skipForward,
@@ -723,3 +748,5 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
 }
+
+    
