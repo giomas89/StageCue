@@ -15,4 +15,7 @@ export interface Settings {
     ip: string;
     port: number;
   };
+  audio: {
+    outputId: string | null;
+  }
 }

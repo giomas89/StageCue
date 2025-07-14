@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 interface MidiMessage {
   command: number;
@@ -117,30 +118,64 @@ function MidiSettings() {
 
 function OscSettings() {
     const { toast } = useToast();
+    const oscCommands = [
+        { command: "Play", address: "/soundcue/play" },
+        { command: "Pause", address: "/soundcue/pause" },
+        { command: "Stop", address: "/soundcue/stop" },
+        { command: "Next", address: "/soundcue/next" },
+        { command: "Previous", address: "/soundcue/prev" },
+        { command: "Play Track", address: "/soundcue/play {track_index}" },
+    ];
+
     return (
         <Card>
             <CardHeader>
                 <CardTitle>OSC Control</CardTitle>
-                <CardDescription>Control playback via OSC messages.</CardDescription>
+                <CardDescription>Control playback via OSC messages. This requires a bridge application.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">Direct OSC control from a web browser is not possible without a bridge application. Configure your OSC bridge to send messages to this application.</p>
-                <div className="space-y-2">
+                 <div className="space-y-2">
                     <Label htmlFor="osc-ip">OSC Bridge IP Address</Label>
-                    <Input id="osc-ip" placeholder="e.g., 127.0.0.1" />
+                    <Input id="osc-ip" placeholder="e.g., 127.0.0.1" defaultValue="127.0.0.1" />
                 </div>
                  <div className="space-y-2">
                     <Label htmlFor="osc-port">OSC Bridge Port</Label>
-                    <Input id="osc-port" type="number" placeholder="e.g., 9000" />
+                    <Input id="osc-port" type="number" placeholder="e.g., 9000" defaultValue="9000" />
                 </div>
                 <Button onClick={() => toast({title: "Info", description: "This is a placeholder UI."})}>Connect</Button>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">OSC Commands</CardTitle>
+                        <CardDescription>
+                            Here are the OSC addresses to control the player.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Command</TableHead>
+                                    <TableHead>Address</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {oscCommands.map(cmd => (
+                                    <TableRow key={cmd.address}>
+                                        <TableCell className="font-medium">{cmd.command}</TableCell>
+                                        <TableCell><code>{cmd.address}</code></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
             </CardContent>
         </Card>
     );
 }
 
 function GeneralSettings() {
-    const { settings, setSettings } = useSoundCue();
+    const { settings, setSettings, audioOutputs, selectedAudioOutputId, setAudioOutput } = useSoundCue();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -175,42 +210,66 @@ function GeneralSettings() {
     }
 
     return (
-        <Card>
-             <CardHeader>
-                <CardTitle>App Settings</CardTitle>
-                <CardDescription>Export or import your application settings.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex gap-4">
-                 <Button onClick={exportSettings}>Export Settings</Button>
-                 <Button variant="outline" onClick={() => fileInputRef.current?.click()}>Import Settings</Button>
-                 <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={importSettings}
-                    accept="application/json"
-                    className="hidden"
-                  />
-            </CardContent>
-        </Card>
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Audio Output</CardTitle>
+                    <CardDescription>Choose where to play the audio.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                     <Select onValueChange={setAudioOutput} value={selectedAudioOutputId || 'default'}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select an audio output" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="default">Default System Output</SelectItem>
+                            {audioOutputs.map(output => (
+                                <SelectItem key={output.deviceId} value={output.deviceId}>
+                                    {output.label || `Output ${output.deviceId.substring(0,6)}`}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>App Settings</CardTitle>
+                    <CardDescription>Export or import your application settings.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex gap-4">
+                    <Button onClick={exportSettings}>Export Settings</Button>
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>Import Settings</Button>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={importSettings}
+                        accept="application/json"
+                        className="hidden"
+                        />
+                </CardContent>
+            </Card>
+        </div>
     )
 }
 
 export default function SettingsPanel() {
   return (
-    <Tabs defaultValue="midi" className="w-full">
+    <Tabs defaultValue="general" className="w-full">
       <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="midi">MIDI</TabsTrigger>
         <TabsTrigger value="osc">OSC</TabsTrigger>
-        <TabsTrigger value="general">General</TabsTrigger>
       </TabsList>
+      <TabsContent value="general" className="mt-4">
+        <GeneralSettings />
+      </TabsContent>
       <TabsContent value="midi" className="mt-4">
         <MidiSettings />
       </TabsContent>
-      <TabsContent value="osc" className="mt-4">
+       <TabsContent value="osc" className="mt-4">
         <OscSettings />
-      </TabsContent>
-       <TabsContent value="general" className="mt-4">
-        <GeneralSettings />
       </TabsContent>
     </Tabs>
   );

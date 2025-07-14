@@ -40,6 +40,9 @@ interface SoundCueContextType {
   seek: (percentage: number) => void;
   skipForward: () => void;
   skipBackward: () => void;
+  audioOutputs: MediaDeviceInfo[];
+  selectedAudioOutputId: string | null;
+  setAudioOutput: (deviceId: string) => void;
 }
 
 export const SoundCueContext = createContext<SoundCueContextType | undefined>(undefined);
@@ -58,14 +61,32 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>({
     midi: { inputId: null },
     osc: { ip: '127.0.0.1', port: 9000 },
+    audio: { outputId: 'default' }
   });
+
+  const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>('default');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const playNextRef = useRef((_isTrackEnd: boolean) => {});
 
+  const getAudioOutputs = useCallback(async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const outputs = devices.filter(device => device.kind === 'audiooutput');
+            setAudioOutputs(outputs);
+        } catch (err) {
+            console.error("Error enumerating audio devices:", err);
+            toast({ variant: "destructive", title: "Error", description: "Could not list audio devices." });
+        }
+    }
+  }, [toast]);
+
   useEffect(() => {
     audioRef.current = new Audio();
+    getAudioOutputs();
     
     const audio = audioRef.current;
     
@@ -84,18 +105,20 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         setIsPlaying(false);
     }
 
+    navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
     return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', getAudioOutputs);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast]);
+  }, [toast, getAudioOutputs]);
 
   useEffect(() => {
     if (isShuffled) {
@@ -116,6 +139,29 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(vol > 0 && isMuted) setIsMuted(false);
     }
   }
+
+  const setAudioOutput = useCallback(async (deviceId: string) => {
+    if (audioRef.current && 'setSinkId' in HTMLAudioElement.prototype) {
+      try {
+        await (audioRef.current as any).setSinkId(deviceId);
+        setSelectedAudioOutputId(deviceId);
+        setSettings(s => ({ ...s, audio: { ...s.audio, outputId: deviceId } }));
+      } catch (error) {
+        console.error("Error setting audio output:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Could not set audio output device.",
+        });
+      }
+    } else {
+        toast({
+          variant: "destructive",
+          title: "Feature Not Supported",
+          description: "Your browser does not support changing audio output devices.",
+        });
+    }
+  }, [toast]);
 
   const toggleMute = () => {
       setIsMuted(prev => {
@@ -246,7 +292,10 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     clearQueue,
     seek,
     skipForward,
-    skipBackward
+    skipBackward,
+    audioOutputs,
+    selectedAudioOutputId,
+    setAudioOutput
   };
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
