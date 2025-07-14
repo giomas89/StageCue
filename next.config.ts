@@ -18,6 +18,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Permissions-Policy',
+            value: 'midi=*',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
