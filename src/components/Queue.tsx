@@ -210,12 +210,11 @@ export default function Queue() {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                onClick={() => playTrack(index)}
+                                onDoubleClick={() => playTrack(index)}
                                 className={cn(
                                 'flex items-center justify-between p-3 rounded-md cursor-pointer hover:bg-muted group',
                                 index === currentTrackIndex && 'bg-primary/20',
-                                snapshot.isDragging && 'bg-accent shadow-lg',
-                                isShuffled && 'opacity-70 cursor-not-allowed'
+                                snapshot.isDragging && 'bg-accent shadow-lg'
                                 )}
                             >
                                 <div className="flex items-center gap-3">
