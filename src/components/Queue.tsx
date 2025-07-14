@@ -209,20 +209,21 @@ export default function Queue() {
                             <li
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
-                                {...provided.dragHandleProps}
                                 onDoubleClick={() => playTrack(index)}
                                 className={cn(
-                                'flex items-center justify-between p-3 rounded-md cursor-pointer hover:bg-muted group',
-                                index === currentTrackIndex && 'bg-primary/20',
+                                'flex items-center justify-between p-3 rounded-md group',
+                                index === currentTrackIndex ? 'bg-primary/20' : 'hover:bg-muted',
                                 snapshot.isDragging && 'bg-accent shadow-lg'
                                 )}
                             >
                                 <div className="flex items-center gap-3">
-                                    <GripVertical className="w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100" />
+                                    <div {...provided.dragHandleProps} className="cursor-grab">
+                                        <GripVertical className="w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100" />
+                                    </div>
                                     <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
-                                    <span className="font-medium">{track.name}</span>
+                                    <span className="font-medium cursor-default">{track.name}</span>
                                 </div>
-                                <span className="text-sm text-muted-foreground">{formatDuration(track.duration)}</span>
+                                <span className="text-sm text-muted-foreground cursor-default">{formatDuration(track.duration)}</span>
                             </li>
                             )}
                         </Draggable>

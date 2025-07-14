@@ -128,7 +128,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [isShuffled, setIsShuffled] = useState(false);
   
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [_settings, _setSettings] = useState<Settings>(defaultSettings);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -148,29 +148,33 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
   const selectedAudioOutputId = audioSettings.outputId;
 
-  useEffect(() => {
-    // Hydration-safe settings load
-    const { settings, audioSettings, volume, isMuted } = loadInitialState();
-    setSettings(settings);
-    setAudioSettings(audioSettings);
-    setVolume(volume);
-    setIsMuted(isMuted);
-    setIsHydrated(true);
+  const setSettings = useCallback((updater: React.SetStateAction<Settings>) => {
+    _setSettings(prev => {
+        const newState = typeof updater === 'function' ? (updater as (prevState: Settings) => Settings)(prev) : updater;
+        return newState;
+    });
   }, []);
+
+  useEffect(() => {
+    const { settings: loadedSettings, audioSettings: loadedAudioSettings, volume: loadedVolume, isMuted: loadedIsMuted } = loadInitialState();
+    setSettings(loadedSettings);
+    setAudioSettings(loadedAudioSettings);
+    setVolume(loadedVolume);
+    setIsMuted(loadedIsMuted);
+    setIsHydrated(true);
+  }, [setSettings]);
   
-  // Save settings to localStorage whenever they change
   useEffect(() => {
     if (isHydrated) {
         try {
-            const dataToSave = { settings, audioSettings, volume, isMuted };
+            const dataToSave = { settings: _settings, audioSettings, volume, isMuted };
             localStorage.setItem('soundcue-settings', JSON.stringify(dataToSave));
         } catch (error) {
             console.error("Failed to save settings to localStorage", error);
         }
     }
-  }, [settings, audioSettings, volume, isMuted, isHydrated]);
+  }, [_settings, audioSettings, volume, isMuted, isHydrated]);
 
-  // Update audio element properties when volume or mute state changes
   useEffect(() => {
     if (audioRef.current) {
         let finalVolume = volume;
@@ -282,7 +286,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const playTrack = useCallback((index: number, andPlay = true) => {
     stopFade();
-    const trackToPlay = (isShuffled ? shuffledQueue : queue)[index];
+    const trackQueue = isShuffled ? shuffledQueue : queue;
+    const trackToPlay = trackQueue[index];
     
     if (trackToPlay && audioRef.current) {
         setCurrentTrackIndex(index);
@@ -392,7 +397,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
       switch (error.code) {
         case MediaError.MEDIA_ERR_ABORTED:
-          // This often happens when changing tracks, so we don't want to show an error.
           console.log(`Playback aborted for ${trackName}. This is usually normal.`);
           return;
         case MediaError.MEDIA_ERR_DECODE:
@@ -429,7 +433,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     };
   }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack]);
   
-  // Effect to handle initial track selection when queue is populated
   useEffect(() => {
       if (queue.length > 0 && currentTrackIndex === null) {
           playTrack(0, false);
@@ -444,15 +447,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (newIsShuffled) {
       const shuffled = [...queue].sort(() => Math.random() - 0.5);
       setShuffledQueue(shuffled);
-      if (currentTrackId) {
-        const newIndex = shuffled.findIndex(t => t.id === currentTrackId);
-        setCurrentTrackIndex(newIndex !== -1 ? newIndex : null);
-      }
+      const newIndex = currentTrackId ? shuffled.findIndex(t => t.id === currentTrackId) : 0;
+      setCurrentTrackIndex(newIndex !== -1 ? newIndex : 0);
     } else {
-      if (currentTrackId) {
-        const newIndex = queue.findIndex(t => t.id === currentTrackId);
-        setCurrentTrackIndex(newIndex !== -1 ? newIndex : null);
-      }
+      const newIndex = currentTrackId ? queue.findIndex(t => t.id === currentTrackId) : 0;
+      setCurrentTrackIndex(newIndex !== -1 ? newIndex : 0);
     }
   }, [isShuffled, queue, currentTrack]);
   
@@ -645,13 +644,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const newQueue = Array.from(queue);
     const [removed] = newQueue.splice(startIndex, 1);
     newQueue.splice(endIndex, 0, removed);
+    
     setQueue(newQueue);
 
-    if (currentTrack?.id) {
-        const newCurrentTrackIndex = newQueue.findIndex(track => track.id === currentTrack.id);
-        if (newCurrentTrackIndex !== -1) {
-            setCurrentTrackIndex(newCurrentTrackIndex);
-        }
+    const currentTrackId = currentTrack?.id;
+    if (currentTrackId) {
+      const newIndex = newQueue.findIndex(track => track.id === currentTrackId);
+      if (newIndex !== -1) {
+        setCurrentTrackIndex(newIndex);
+      }
     }
   }, [queue, isShuffled, toast, currentTrack]);
   
@@ -690,10 +691,9 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   
   
   useEffect(() => {
-    const selectedInput = midiInputs.find(input => input.id === settings.midi.inputId);
+    const selectedInput = midiInputs.find(input => input.id === _settings.midi.inputId);
 
     midiInputs.forEach(input => {
-      // Clear any previous listeners
       if (input.onmidimessage) {
         input.onmidimessage = null;
       }
@@ -725,8 +725,8 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
                 return;
             }
             
-            const commandToTrigger = (Object.keys(settings.midi.mappings) as MidiCommand[]).find(
-                cmd => settings.midi.mappings[cmd] === note
+            const commandToTrigger = (Object.keys(_settings.midi.mappings) as MidiCommand[]).find(
+                cmd => _settings.midi.mappings[cmd] === note
             );
 
             if(commandToTrigger) {
@@ -742,11 +742,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         if(selectedInput) selectedInput.onmidimessage = null;
       };
     }
-  }, [settings.midi.inputId, settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions]);
+  }, [_settings.midi.inputId, _settings.midi.mappings, midiInputs, learningCommand, toast, midiCommandActions, setSettings]);
 
 
   if (!isHydrated) {
-    return null; // or a loading spinner
+    return null;
   }
 
   const value: SoundCueContextType = {
@@ -769,7 +769,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setIsMuted,
     repeatMode,
     setRepeatMode,
-    settings,
+    settings: _settings,
     setSettings,
     audioSettings,
     setAudioSettings,
