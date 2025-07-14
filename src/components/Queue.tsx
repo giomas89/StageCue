@@ -50,27 +50,22 @@ export default function Queue() {
         return;
       }
       
-      const wasEmpty = queue.length === 0;
-
       setQueue(prevQueue => {
           const updatedQueue = [...prevQueue, ...newTracks];
           
-          // Preload durations
           updatedQueue.forEach(track => {
               if (!track.duration) {
-                  const audio = new Audio(track.url);
+                  const audio = new Audio();
+                  audio.src = track.url;
                   audio.onloadedmetadata = () => {
                       setQueue(current => current.map(t => 
                           t.id === track.id ? { ...t, duration: audio.duration } : t
                       ));
-                      URL.revokeObjectURL(audio.src); // Clean up blob URL after getting metadata
+                      // Do NOT revoke the object URL here, as it's needed for playback
                   };
               }
           });
 
-          if(wasEmpty && updatedQueue.length > 0) {
-              setTimeout(() => playTrack(0, false), 100);
-          }
           return updatedQueue;
       });
 

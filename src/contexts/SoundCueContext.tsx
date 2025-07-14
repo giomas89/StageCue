@@ -71,7 +71,6 @@ const loadSettings = (): Settings => {
     try {
         const savedSettings = localStorage.getItem('soundcue-settings');
         if (savedSettings) {
-            // Merge saved settings with defaults to ensure all keys are present
             const parsed = JSON.parse(savedSettings);
             const mergedSettings = {
                 ...defaultSettings,
@@ -107,11 +106,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
-  const playNextRef = useRef((_isTrackEnd: boolean) => {});
-  const isPlayingRef = useRef(false);
-  const playAfterLoadRef = useRef(false);
-
-  // Save settings to localStorage whenever they change
+  
   useEffect(() => {
     try {
         const settingsJson = JSON.stringify(settings);
@@ -135,6 +130,28 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const playNext = useCallback((fromError: boolean = false) => {
+    if (currentTrackIndex === null) return;
+    
+    let nextIndex = currentTrackIndex + 1;
+    if (nextIndex >= (isShuffled ? shuffledQueue : queue).length) {
+      if (repeatMode === 'all') {
+        nextIndex = 0;
+      } else {
+        stopPlayback();
+        if ((isShuffled ? shuffledQueue : queue).length > 0) {
+            playTrack(0, false);
+        }
+        return;
+      }
+    }
+    if (nextIndex === currentTrackIndex && (isShuffled ? shuffledQueue : queue).length === 1) {
+        stopPlayback();
+        return;
+    }
+    playTrack(nextIndex, true);
+  }, [currentTrackIndex, queue, shuffledQueue, isShuffled, repeatMode]);
+
   useEffect(() => {
     if (!audioRef.current) {
         audioRef.current = new Audio();
@@ -152,20 +169,15 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
       setProgress((audio.currentTime / audio.duration) * 100 || 0);
       setDuration(audio.duration || 0);
     };
-    const handleEnded = () => playNextRef.current(true);
-    
-    const handleCanPlay = () => {
-        if (!audio) return;
-        setDuration(audio.duration || 0);
-        if (playAfterLoadRef.current) {
-            audio.play().catch(e => {
-                console.error("Playback failed on canplay", e);
-                setIsPlaying(false);
-                isPlayingRef.current = false;
-            });
-            playAfterLoadRef.current = false;
+
+    const handleEnded = () => {
+        if (repeatMode === 'one') {
+            audio.currentTime = 0;
+            audio.play();
+        } else {
+            playNext();
         }
-    }
+    };
     
     const handleError = (e: any) => {
         const error = (e.target as HTMLAudioElement).error;
@@ -176,27 +188,22 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
                 description: `Could not play the audio file. It might be corrupt or in an unsupported format. Code: ${error.code}, Message: ${error.message}`
             });
         }
-       
         setIsPlaying(false);
-        isPlayingRef.current = false;
-        playAfterLoadRef.current = false;
-        playNext(true); // Attempt to play next track on error
+        playNext(true);
     }
 
     navigator.mediaDevices.addEventListener('devicechange', getAudioOutputs);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
 
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', getAudioOutputs);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [toast, getAudioOutputs, settings.audio.outputId]);
+  }, [toast, getAudioOutputs, settings.audio.outputId, playNext, repeatMode]);
   
   const currentQueue = isShuffled ? shuffledQueue : queue;
   const currentTrack = currentTrackIndex !== null ? currentQueue[currentTrackIndex] : null;
@@ -205,21 +212,17 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     const trackToPlay = currentQueue[index];
     if (trackToPlay && audioRef.current) {
       setCurrentTrackIndex(index);
-      setIsPlaying(andPlay);
-      isPlayingRef.current = andPlay;
-      playAfterLoadRef.current = andPlay;
-      
-      if (audioRef.current.src !== trackToPlay.url) {
-        audioRef.current.src = trackToPlay.url;
-        audioRef.current.load();
-      } else if (andPlay) {
-         audioRef.current.play().catch(e => {
-            console.error("Playback failed on re-play", e);
-            setIsPlaying(false);
-            isPlayingRef.current = false;
-         });
+      audioRef.current.src = trackToPlay.url;
+      audioRef.current.load();
+      if (andPlay) {
+        audioRef.current.play().then(() => {
+          setIsPlaying(true);
+        }).catch(e => {
+          console.error("Playback failed on playTrack", e);
+          setIsPlaying(false);
+        });
       } else {
-        audioRef.current.pause();
+        setIsPlaying(false);
       }
     }
   }, [currentQueue]);
@@ -231,7 +234,6 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     _setQueue(newQueue);
 
     if (wasEmpty && newQueue.length > 0 && currentTrackIndex === null) {
-      // Defer this call to ensure the state update has propagated and `currentQueue` is up-to-date
       setTimeout(() => playTrack(0, false), 0);
     }
   };
@@ -259,7 +261,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         }
     }
 
-  }, [isShuffled, queue]);
+  }, [isShuffled, queue, currentTrack]);
   
   const setVolume = (vol: number) => {
     if (audioRef.current) {
@@ -309,21 +311,14 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (isPlaying) {
       audioRef.current?.pause();
       setIsPlaying(false);
-      isPlayingRef.current = false;
-      playAfterLoadRef.current = false;
     } else {
       if (audioRef.current) {
-          const playPromise = audioRef.current.play();
-          if (playPromise !== undefined) {
-              playPromise.then(() => {
-                setIsPlaying(true);
-                isPlayingRef.current = true;
-              }).catch(e => {
-                  console.error("Playback failed on toggle", e);
-                  setIsPlaying(false);
-                  isPlayingRef.current = false;
-              });
-          }
+          audioRef.current.play().then(() => {
+            setIsPlaying(true);
+          }).catch(e => {
+              console.error("Playback failed on toggle", e);
+              setIsPlaying(false);
+          });
       }
     }
   }, [isPlaying, currentTrack, currentQueue, playTrack]);
@@ -333,65 +328,29 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         setIsPlaying(false);
-        isPlayingRef.current = false;
-        playAfterLoadRef.current = false;
     }
   }, []);
-
-  const playNext = useCallback((isTrackEnd: boolean = false, fromError: boolean = false) => {
-    if (currentTrackIndex === null) return;
-    
-    // If repeat one is on and the track ended naturally (not from an error), repeat it.
-    if (repeatMode === 'one' && isTrackEnd && !fromError) {
-        if (audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current.play();
-            setIsPlaying(true);
-            isPlayingRef.current = true;
-        }
-        return;
-    }
-
-    let nextIndex = currentTrackIndex + 1;
-    if (nextIndex >= currentQueue.length) {
-      if (repeatMode === 'all') {
-        nextIndex = 0;
-      } else {
-        // Stop playback if we are at the end and not repeating all.
-        stopPlayback();
-        // If the queue has items, reset to the first track but don't play.
-        if (currentQueue.length > 0) {
-            playTrack(0, false);
-        }
-        return;
-      }
-    }
-    // If the next track is the same as the current one (e.g., single-item queue), stop to prevent infinite error loops.
-    if (nextIndex === currentTrackIndex) {
-        stopPlayback();
-        return;
-    }
-    playTrack(nextIndex);
-  }, [currentTrackIndex, currentQueue.length, playTrack, repeatMode, stopPlayback]);
-  
-  playNextRef.current = playNext;
 
   const playPrev = useCallback(() => {
     if (currentTrackIndex === null) return;
     if ((audioRef.current?.currentTime || 0) > 3) {
       audioRef.current!.currentTime = 0;
     } else {
-      const prevIndex = currentTrackIndex - 1;
+      let prevIndex = currentTrackIndex - 1;
+      if (prevIndex < 0) {
+        prevIndex = repeatMode === 'all' ? currentQueue.length - 1 : -1;
+      }
       if (prevIndex >= 0) {
-        playTrack(prevIndex);
-      } else if (repeatMode === 'all') {
-        playTrack(currentQueue.length - 1);
+        playTrack(prevIndex, true);
       }
     }
   }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length]);
 
   const clearQueue = () => {
     stopPlayback();
+    // Revoke old object URLs
+    queue.forEach(track => URL.revokeObjectURL(track.url));
+
     _setQueue([]);
     setShuffledQueue([]);
     setCurrentTrackIndex(null);
@@ -399,8 +358,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     setDuration(0);
     if(audioRef.current) {
         audioRef.current.src = "";
-        // Resetting the audio element by removing the source and calling load()
-        // This is a common practice to clear the buffer and state of the audio element.
+        audioRef.current.removeAttribute('src');
         audioRef.current.load();
     }
   };
@@ -461,5 +419,3 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
 
   return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
 }
-
-    
