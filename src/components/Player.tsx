@@ -38,10 +38,6 @@ const formatTime = (seconds: number) => {
   )}`;
 };
 
-const handleProgressChange = (value: number[], seek: (percentage: number) => void) => {
-  seek(value[0]);
-};
-
 export default function Player() {
   const {
     currentTrack,
@@ -78,6 +74,10 @@ export default function Player() {
     setVolume(newVolume);
   }, [setVolume, audioSettings.maxVolume]);
 
+  const handleProgressChange = useCallback((value: number[]) => {
+    seek(value[0]);
+  }, [seek]);
+
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   
   const maxVolume = audioSettings.maxVolume.enabled ? audioSettings.maxVolume.level : 100;
@@ -99,7 +99,7 @@ export default function Player() {
             value={[progress]}
             max={100}
             step={0.1}
-            onValueChange={(value) => handleProgressChange(value, seek)}
+            onValueChange={handleProgressChange}
             disabled={!currentTrack}
             className="w-full"
         />
