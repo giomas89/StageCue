@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { DragDropContext, Droppable, Draggable, type DropResult } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from 'react-beautiful-dnd';
 
 
 const formatDuration = (seconds: number | undefined) => {
@@ -29,6 +29,23 @@ const formatDuration = (seconds: number | undefined) => {
     const remainingSeconds = Math.floor(seconds % 60);
     return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 };
+
+// Workaround for react-beautiful-dnd in React 18 Strict Mode
+const SafeDroppable = ({ children, ...props }: DroppableProps) => {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    const animation = requestAnimationFrame(() => setEnabled(true));
+    return () => {
+      cancelAnimationFrame(animation);
+      setEnabled(false);
+    };
+  }, []);
+  if (!enabled) {
+    return null;
+  }
+  return <Droppable {...props}>{children}</Droppable>;
+};
+
 
 export default function Queue() {
   const { queue, setQueue, currentTrackIndex, playTrack, clearQueue, reorderQueue, isShuffled, selectedIndex, setSelectedIndex } = useSoundCue();
@@ -206,7 +223,7 @@ export default function Queue() {
       <ScrollArea className="flex-1">
         {isClient ? (
             <DragDropContext onDragEnd={onDragEnd}>
-                <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
+                <SafeDroppable droppableId="playlist" isDropDisabled={isShuffled}>
                     {(provided) => (
                         <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
                         {queue.length > 0 ? (
@@ -251,7 +268,7 @@ export default function Queue() {
                         {provided.placeholder}
                         </ul>
                     )}
-                </Droppable>
+                </SafeDroppable>
             </DragDropContext>
         ) : null}
       </ScrollArea>
