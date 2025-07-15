@@ -33,6 +33,7 @@ const formatDuration = (seconds: number | undefined) => {
 // Workaround for react-beautiful-dnd in React 18 Strict Mode
 const SafeDroppable = ({ children, ...props }: DroppableProps) => {
   const [enabled, setEnabled] = useState(false);
+
   useEffect(() => {
     const animation = requestAnimationFrame(() => setEnabled(true));
     return () => {
@@ -40,9 +41,11 @@ const SafeDroppable = ({ children, ...props }: DroppableProps) => {
       setEnabled(false);
     };
   }, []);
+
   if (!enabled) {
     return null;
   }
+
   return <Droppable {...props}>{children}</Droppable>;
 };
 
