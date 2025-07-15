@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/((?!api/).*)',
         headers: [
           {
             key: 'Permissions-Policy',
