@@ -38,6 +38,10 @@ const formatTime = (seconds: number) => {
   )}`;
 };
 
+const handleProgressChange = (value: number[], seek: (percentage: number) => void) => {
+  seek(value[0]);
+};
+
 export default function Player() {
   const {
     currentTrack,
@@ -59,17 +63,11 @@ export default function Player() {
     setRepeatMode,
     isShuffled,
     toggleShuffle,
-    skipForward,
-    skipBackward,
     audioSettings,
   } = useSoundCue();
 
   const VolumeIcon = isMuted ? VolumeX : volume > 0.5 ? Volume2 : volume > 0 ? Volume1 : VolumeX;
 
-  const handleProgressChange = (value: number[]) => {
-    seek(value[0]);
-  };
-  
   const handleVolumeChange = (value: number[]) => {
     let newVolume = value[0] / 100;
     if (audioSettings.maxVolume.enabled) {
@@ -99,7 +97,7 @@ export default function Player() {
             value={[progress]}
             max={100}
             step={0.1}
-            onValueChange={handleProgressChange}
+            onValueChange={(value) => handleProgressChange(value, seek)}
             disabled={!currentTrack}
             className="w-full"
         />
@@ -209,5 +207,3 @@ export default function Player() {
     </div>
   );
 }
-
-    
