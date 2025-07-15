@@ -1,6 +1,6 @@
 
 'use client';
-
+import { useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -70,13 +70,13 @@ export default function Player() {
 
   const VolumeIcon = isMuted ? VolumeX : volume > 0.5 ? Volume2 : volume > 0 ? Volume1 : VolumeX;
 
-  const handleVolumeChange = (value: number[]) => {
+  const handleVolumeChange = useCallback((value: number[]) => {
     let newVolume = value[0] / 100;
     if (audioSettings.maxVolume.enabled) {
       newVolume = Math.min(newVolume, audioSettings.maxVolume.level / 100);
     }
     setVolume(newVolume);
-  };
+  }, [setVolume, audioSettings.maxVolume]);
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   
