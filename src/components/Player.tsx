@@ -64,6 +64,8 @@ export default function Player() {
     isShuffled,
     toggleShuffle,
     audioSettings,
+    skipForward,
+    skipBackward
   } = useSoundCue();
 
   const VolumeIcon = isMuted ? VolumeX : volume > 0.5 ? Volume2 : volume > 0 ? Volume1 : VolumeX;
