@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from 'react-beautiful-dnd';
+// import { DragDropContext, Droppable, Draggable, type DropResult, type DroppableProps } from 'react-beautiful-dnd';
 
 
 const formatDuration = (seconds: number | undefined) => {
@@ -30,7 +30,7 @@ const formatDuration = (seconds: number | undefined) => {
     return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 };
 
-const isBrowser = typeof window !== 'undefined';
+// const isBrowser = typeof window !== 'undefined';
 
 export default function Queue() {
   const { queue, setQueue, currentTrackIndex, playTrack, clearQueue, reorderQueue, isShuffled, selectedIndex, setSelectedIndex } = useSoundCue();
@@ -131,12 +131,12 @@ export default function Queue() {
      toast({ title: "Feature not fully supported", description: "Due to browser security, audio files cannot be loaded automatically from an M3U file. Please add files manually." });
   };
 
-  const onDragEnd = (result: DropResult) => {
-    if (!result.destination || isShuffled) {
-      return;
-    }
-    reorderQueue(result.source.index, result.destination.index);
-  };
+  // const onDragEnd = (result: DropResult) => {
+  //   if (!result.destination || isShuffled) {
+  //     return;
+  //   }
+  //   reorderQueue(result.source.index, result.destination.index);
+  // };
 
 
   return (
@@ -201,8 +201,8 @@ export default function Queue() {
         </div>
       </div>
       <ScrollArea className="flex-1">
-        <DragDropContext onDragEnd={onDragEnd}>
-            {isBrowser && <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
+        {/* <DragDropContext onDragEnd={onDragEnd}>
+            <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
                 {(provided) => (
                     <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
                     {queue.length > 0 ? (
@@ -247,11 +247,42 @@ export default function Queue() {
                     {provided.placeholder}
                     </ul>
                 )}
-            </Droppable>}
-        </DragDropContext>
+            </Droppable>
+        </DragDropContext> */}
+        <ul className="p-2">
+            {queue.length > 0 ? (
+                queue.map((track, index) => (
+                <li
+                    key={track.id}
+                    onClick={() => setSelectedIndex(index)}
+                    onDoubleClick={() => playTrack(index, true)}
+                    className={cn(
+                    'flex items-center justify-between p-3 rounded-md group',
+                    index === currentTrackIndex ? 'bg-primary/20' : (index === selectedIndex ? 'bg-muted' : 'hover:bg-muted')
+                    )}
+                >
+                    <div className="flex items-center gap-3">
+                        <GripVertical 
+                            className={cn(
+                                "w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100",
+                                'opacity-25'
+                            )}
+                        />
+                        <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
+                        <span className="font-medium cursor-default">{track.name}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground cursor-default">{formatDuration(track.duration)}</span>
+                </li>
+                ))
+            ) : (
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center" style={{height: 'calc(100vh - 250px)'}}>
+                    <ListMusic className="w-16 h-16 mb-4" />
+                    <h3 className="text-lg font-semibold">Your playlist is empty</h3>
+                    <p className="text-sm">Click "Add" or drag & drop files to start.</p>
+                </div>
+            )}
+        </ul>
       </ScrollArea>
     </div>
   );
 }
-
-    
