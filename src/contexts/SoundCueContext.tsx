@@ -31,6 +31,7 @@ interface SoundCueContextType {
   volume: number;
   setVolume: React.Dispatch<React.SetStateAction<number>>;
   isMuted: boolean;
+  toggleMute: () => void;
   setIsMuted: React.Dispatch<React.SetStateAction<boolean>>;
   repeatMode: RepeatMode;
   setRepeatMode: React.Dispatch<React.SetStateAction<RepeatMode>>;
@@ -163,15 +164,11 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     _setVolume(prevVolume => {
         const newVolume = typeof arg === 'function' ? arg(prevVolume) : arg;
         if (audioRef.current) {
-            let finalVolume = newVolume;
-            if (audioSettings.maxVolume.enabled) {
-                finalVolume = Math.min(newVolume, audioSettings.maxVolume.level / 100);
-            }
-            audioRef.current.volume = finalVolume;
+            audioRef.current.volume = newVolume;
         }
         return newVolume;
     });
-  }, [audioSettings.maxVolume]);
+  }, []);
   
   const toggleMute = useCallback(() => {
     _setIsMuted(prev => {
@@ -814,7 +811,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
   }
 
   const value: SoundCueContextType = {
-    queue: currentQueue,
+    queue,
     setQueue,
     isShuffled,
     toggleShuffle,
@@ -832,6 +829,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     volume,
     setVolume,
     isMuted,
+    toggleMute,
     setIsMuted,
     repeatMode,
     setRepeatMode,
