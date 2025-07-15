@@ -364,7 +364,7 @@ function GeneralSettings() {
                     <SelectContent>
                         <SelectItem value="default">Default System Output</SelectItem>
                         {audioOutputs.map(output => (
-                            <SelectItem key={output.deviceId} value={output.deviceId}>
+                           output.deviceId && <SelectItem key={output.deviceId} value={output.deviceId}>
                                 {output.label || `Output ${output.deviceId.substring(0,6)}`}
                             </SelectItem>
                         ))}
@@ -510,5 +510,3 @@ export default function SettingsPanel() {
     </Tabs>
   );
 }
-
-    
