@@ -30,18 +30,7 @@ const formatDuration = (seconds: number | undefined) => {
     return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 };
 
-// Wrapper to solve StrictMode issue with react-beautiful-dnd
-const SafeDroppable = ({ children, ...props }: DroppableProps) => {
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    setEnabled(true);
-  }, []);
-  if (!enabled) {
-    return null;
-  }
-  return <Droppable {...props}>{children}</Droppable>;
-};
-
+const isBrowser = typeof window !== 'undefined';
 
 export default function Queue() {
   const { queue, setQueue, currentTrackIndex, playTrack, clearQueue, reorderQueue, isShuffled, selectedIndex, setSelectedIndex } = useSoundCue();
@@ -213,7 +202,7 @@ export default function Queue() {
       </div>
       <ScrollArea className="flex-1">
         <DragDropContext onDragEnd={onDragEnd}>
-            <SafeDroppable droppableId="playlist" isDropDisabled={isShuffled}>
+            {isBrowser && <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
                 {(provided) => (
                     <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
                     {queue.length > 0 ? (
@@ -258,9 +247,11 @@ export default function Queue() {
                     {provided.placeholder}
                     </ul>
                 )}
-            </SafeDroppable>
+            </Droppable>}
         </DragDropContext>
       </ScrollArea>
     </div>
   );
 }
+
+    
