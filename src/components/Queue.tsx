@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useSoundCue } from '@/hooks/useSoundCue';
 import type { Track } from '@/types';
 import { Button } from './ui/button';
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, Draggable, type DropResult } from 'react-beautiful-dnd';
 
 
 const formatDuration = (seconds: number | undefined) => {
@@ -36,6 +36,11 @@ export default function Queue() {
   const { toast } = useToast();
   const [playlistName, setPlaylistName] = useState("playlist");
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const addFilesToQueue = (files: FileList) => {
     if (files) {
@@ -199,53 +204,56 @@ export default function Queue() {
         </div>
       </div>
       <ScrollArea className="flex-1">
-        <DragDropContext onDragEnd={onDragEnd}>
-            <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
-                {(provided) => (
-                    <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
-                    {queue.length > 0 ? (
-                        queue.map((track, index) => (
-                        <Draggable key={track.id} draggableId={track.id} index={index} isDragDisabled={isShuffled}>
-                            {(provided, snapshot) => (
-                            <li
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                onClick={() => setSelectedIndex(index)}
-                                onDoubleClick={() => playTrack(index, true)}
-                                className={cn(
-                                'flex items-center justify-between p-3 rounded-md group',
-                                index === currentTrackIndex ? 'bg-primary/20' : (index === selectedIndex ? 'bg-muted' : 'hover:bg-muted'),
-                                snapshot.isDragging && 'bg-accent shadow-lg'
+        {isClient ? (
+            <DragDropContext onDragEnd={onDragEnd}>
+                <Droppable droppableId="playlist" isDropDisabled={isShuffled}>
+                    {(provided) => (
+                        <ul className="p-2" {...provided.droppableProps} ref={provided.innerRef}>
+                        {queue.length > 0 ? (
+                            queue.map((track, index) => (
+                            <Draggable key={track.id} draggableId={track.id} index={index} isDragDisabled={isShuffled}>
+                                {(provided, snapshot) => (
+                                <li
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    onClick={() => setSelectedIndex(index)}
+                                    onDoubleClick={() => playTrack(index, true)}
+                                    className={cn(
+                                    'flex items-center justify-between p-3 rounded-md group',
+                                    index === currentTrackIndex ? 'bg-primary/20' : (index === selectedIndex ? 'bg-muted' : 'hover:bg-muted'),
+                                    snapshot.isDragging && 'bg-accent shadow-lg'
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div {...provided.dragHandleProps}>
+                                            <GripVertical 
+                                            className={cn(
+                                                "w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100",
+                                                isShuffled ? 'cursor-not-allowed opacity-25' : 'cursor-grab'
+                                            )}
+                                            />
+                                        </div>
+                                        <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
+                                        <span className="font-medium cursor-default">{track.name}</span>
+                                    </div>
+                                    <span className="text-sm text-muted-foreground cursor-default">{formatDuration(track.duration)}</span>
+                                </li>
                                 )}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <GripVertical 
-                                      {...provided.dragHandleProps} 
-                                      className={cn(
-                                        "w-5 h-5 text-muted-foreground/50 transition-opacity group-hover:opacity-100",
-                                        isShuffled ? 'cursor-not-allowed opacity-25' : 'cursor-grab'
-                                      )}
-                                     />
-                                    <span className="text-sm text-muted-foreground w-6 text-right">{index + 1}.</span>
-                                    <span className="font-medium cursor-default">{track.name}</span>
-                                </div>
-                                <span className="text-sm text-muted-foreground cursor-default">{formatDuration(track.duration)}</span>
-                            </li>
-                            )}
-                        </Draggable>
-                        ))
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center" style={{height: 'calc(100vh - 250px)'}}>
-                            <ListMusic className="w-16 h-16 mb-4" />
-                            <h3 className="text-lg font-semibold">Your playlist is empty</h3>
-                            <p className="text-sm">Click "Add" or drag & drop files to start.</p>
-                        </div>
+                            </Draggable>
+                            ))
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center" style={{height: 'calc(100vh - 250px)'}}>
+                                <ListMusic className="w-16 h-16 mb-4" />
+                                <h3 className="text-lg font-semibold">Your playlist is empty</h3>
+                                <p className="text-sm">Click "Add" or drag & drop files to start.</p>
+                            </div>
+                        )}
+                        {provided.placeholder}
+                        </ul>
                     )}
-                     {provided.placeholder}
-                    </ul>
-                )}
-            </Droppable>
-        </DragDropContext>
+                </Droppable>
+            </DragDropContext>
+        ) : null}
       </ScrollArea>
     </div>
   );
