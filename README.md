@@ -5,7 +5,6 @@ SoundCue is a sophisticated audio playback application designed for creators, mu
 ![SoundCue Application Screenshot](https://placehold.co/800x500.png?text=SoundCue+App+UI)
 
 ## ✨ Features
-
 - **Playlist Management**: Easily add audio files (MP3, WAV, etc.) via drag-and-drop or file selection. Save and load playlists in M3U format.
 - **Advanced Playback Controls**: Play, pause, stop, skip tracks, and seek through audio with precision.
 - **Audio Effects**: Configure fade-in and fade-out effects for smooth transitions.
