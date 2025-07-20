@@ -24,6 +24,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Info, Timer, Volume2 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 const COMMAND_LABELS: Record<MidiCommand, string> = {
     togglePlayPause: 'Play / Pause',
@@ -496,7 +497,16 @@ export default function SettingsPanel() {
       <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="midi">MIDI</TabsTrigger>
-        <TabsTrigger value="osc">OSC</TabsTrigger>
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <TabsTrigger value="osc" disabled className="cursor-not-allowed">OSC</TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>funzionalità attualmente non disponibile</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
       </TabsList>
       <TabsContent value="general" className="mt-4">
         <GeneralSettings />
