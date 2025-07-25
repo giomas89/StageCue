@@ -1,8 +1,8 @@
-# SoundCue - Modern Audio Player
+# StageCue - Modern Audio Player
 
-SoundCue is a sophisticated audio playback application designed for creators, musicians, and live performers. Built with Next.js and leveraging modern web technologies, it offers precise control over audio queues, MIDI integration, and a clean, intuitive user interface.
+StageCue is a sophisticated audio playback application designed for creators, musicians, and live performers. Built with Next.js and leveraging modern web technologies, it offers precise control over audio queues, MIDI integration, and a clean, intuitive user interface.
 
-![SoundCue Application Screenshot](https://placehold.co/800x500.png?text=SoundCue+App+UI)
+![StageCue Application Screenshot](https://placehold.co/800x500.png?text=StageCue+App+UI)
 
 ## ✨ Features
 - **Playlist Management**: Easily add audio files (MP3, WAV, etc.) via drag-and-drop or file selection. Save and load playlists in M3U format.
@@ -37,8 +37,8 @@ You need to have [Node.js](https://nodejs.org/) (version 18 or later) and npm in
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/your-username/soundcue.git
-    cd soundcue
+    git clone https://github.com/your-username/.git
+    cd 
     ```
 
 2.  **Install dependencies**
