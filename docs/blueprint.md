@@ -1,4 +1,4 @@
-# **App Name**: SoundCue
+# **App Name**: StageCue
 
 ## Core Features:
 
