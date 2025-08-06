@@ -1,6 +1,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  output: 'export',  // Aggiunto per generare build statica
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
@@ -17,6 +18,7 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+    unoptimized: true,  // Necessario per l'export statico
   },
   async headers() {
     return [
