@@ -14,6 +14,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: 'StageCue',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,

@@ -1,8 +1,9 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'export',  // Aggiunto per generare build statica
-  /* config options here */
+  output: 'export',
+  trailingSlash: true,
+  assetPrefix: './',
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -18,20 +19,7 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    unoptimized: true,  // Necessario per l'export statico
-  },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Permissions-Policy',
-            value: 'midi=*',
-          },
-        ],
-      },
-    ];
+    unoptimized: true,
   },
 };
 

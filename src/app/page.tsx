@@ -1,5 +1,5 @@
-import SoundCueClient from '@/components/SoundCueClient';
+import StageCueClient from '@/components/SoundCueClient';
 
 export default function Home() {
-  return <SoundCueClient />;
+  return <StageCueClient />;
 }

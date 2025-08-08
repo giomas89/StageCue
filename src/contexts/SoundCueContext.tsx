@@ -12,7 +12,7 @@ import React, {
 import type { Track, Settings, RepeatMode, MidiMessage, MidiCommand, AudioSettings } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
-interface SoundCueContextType {
+interface StageCueContextType {
   queue: Track[];
   setQueue: React.Dispatch<React.SetStateAction<Track[]>>;
   isShuffled: boolean;
@@ -59,7 +59,7 @@ interface SoundCueContextType {
   selectMidiInput: (id: string) => void;
 }
 
-export const SoundCueContext = createContext<SoundCueContextType | undefined>(undefined);
+export const StageCueContext = createContext<StageCueContextType | undefined>(undefined);
 
 const defaultSettings: Settings = {
     midi: {
@@ -88,7 +88,7 @@ const loadInitialState = () => {
         return { settings: defaultSettings, audioSettings: defaultAudioSettings, volume: 1, isMuted: false };
     }
     try {
-        const savedData = localStorage.getItem('soundcue-settings');
+        const savedData = localStorage.getItem('stagecue-settings');
         if (savedData) {
             const parsed = JSON.parse(savedData);
             
@@ -119,7 +119,7 @@ const loadInitialState = () => {
 };
 
 
-export function SoundCueProvider({ children }: { children: ReactNode }) {
+export function StageCueProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<Track[]>([]);
   const [shuffledQueue, setShuffledQueue] = useState<Track[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
@@ -203,7 +203,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     if (isHydrated) {
         try {
             const dataToSave = { settings, audioSettings, volume, isMuted };
-            localStorage.setItem('soundcue-settings', JSON.stringify(dataToSave));
+            localStorage.setItem('stagecue-settings', JSON.stringify(dataToSave));
         } catch (error) {
             console.error("Failed to save settings to localStorage", error);
         }
@@ -810,7 +810,7 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     return null;
   }
 
-  const value: SoundCueContextType = {
+  const value: StageCueContextType = {
     queue,
     setQueue,
     isShuffled,
@@ -857,5 +857,5 @@ export function SoundCueProvider({ children }: { children: ReactNode }) {
     selectMidiInput
   };
 
-  return <SoundCueContext.Provider value={value}>{children}</SoundCueContext.Provider>;
+  return <StageCueContext.Provider value={value}>{children}</StageCueContext.Provider>;
 }

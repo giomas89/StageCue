@@ -1,12 +1,15 @@
 "use client";
 
 import { useContext } from 'react';
-import { SoundCueContext } from '@/contexts/SoundCueContext';
+import { StageCueContext } from '@/contexts/SoundCueContext';
 
-export const useSoundCue = () => {
-  const context = useContext(SoundCueContext);
+export const useStageCue = () => {
+  const context = useContext(StageCueContext);
   if (context === undefined) {
-    throw new Error('useSoundCue must be used within a SoundCueProvider');
+    throw new Error('useStageCue must be used within a StageCueProvider');
   }
   return context;
 };
+
+// Manteniamo anche l'alias per compatibilità
+export const useSoundCue = useStageCue;
