@@ -125,7 +125,7 @@ function MidiSettings() {
             <Card>
                 <CardHeader>
                     <CardTitle>MIDI Note Mapping</CardTitle>
-                    <CardDescription>Assign MIDI notes to player commands. Click "Learn" then press a key on your MIDI device.</CardDescription>
+                    <CardDescription>Assign MIDI notes to player commands. Click &quot;Learn&quot; then press a key on your MIDI device.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Table>
@@ -279,7 +279,7 @@ function OscSettings() {
                           <Info className="h-4 w-4" />
                           <AlertTitle>Info</AlertTitle>
                           <AlertDescription>
-                            This monitor will display messages received from your OSC bridge application once it's connected and sending data.
+                            This monitor will display messages received from your OSC bridge application once it&apos;s connected and sending data.
                           </AlertDescription>
                         </Alert>
                     </CardContent>

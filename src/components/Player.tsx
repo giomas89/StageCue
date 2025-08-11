@@ -183,7 +183,7 @@ export default function Player() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={playNext} disabled={!currentTrack}>
+                  <Button variant="ghost" size="icon" onClick={() => playNext()} disabled={!currentTrack}>
                       <SkipForward className="w-6 h-6" />
                   </Button>
                 </TooltipTrigger>

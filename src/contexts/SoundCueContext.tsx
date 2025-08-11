@@ -7,6 +7,7 @@ import React, {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import type { Track, Settings, RepeatMode, MidiMessage, MidiCommand, AudioSettings } from '@/types';
@@ -52,7 +53,7 @@ interface StageCueContextType {
   selectedAudioOutputId: string | null;
   setAudioOutput: (deviceId: string) => void;
   reorderQueue: (startIndex: number, endIndex: number) => void;
-  midiInputs: WebMidi.MIDIInput[];
+  midiInputs: MIDIInput[];
   lastMidiMessage: MidiMessage | null;
   learningCommand: MidiCommand | null;
   setLearningCommand: React.Dispatch<React.SetStateAction<MidiCommand | null>>;
@@ -84,38 +85,47 @@ const defaultAudioSettings: AudioSettings = {
 };
 
 const loadInitialState = () => {
+    const defaults = { settings: defaultSettings, audioSettings: defaultAudioSettings, volume: 1, isMuted: false };
     if (typeof window === 'undefined') {
-        return { settings: defaultSettings, audioSettings: defaultAudioSettings, volume: 1, isMuted: false };
+        return defaults;
     }
+
     try {
         const savedData = localStorage.getItem('stagecue-settings');
-        if (savedData) {
-            const parsed = JSON.parse(savedData);
-            
-            const mergedSettings = {
-                ...defaultSettings,
-                ...parsed.settings,
-                midi: { ...defaultSettings.midi, ...parsed.settings?.midi, mappings: {...defaultSettings.midi.mappings, ...parsed.settings?.midi?.mappings} },
-                osc: { ...defaultSettings.osc, ...parsed.settings?.osc },
-            };
+        if (!savedData) return defaults;
 
-            const mergedAudioSettings = {
-                ...defaultAudioSettings,
-                ...parsed.audioSettings,
-                fadeIn: {...defaultAudioSettings.fadeIn, ...parsed.audioSettings?.fadeIn}, 
-                fadeOut: {...defaultAudioSettings.fadeOut, ...parsed.audioSettings?.fadeOut},
-                maxVolume: {...defaultAudioSettings.maxVolume, ...parsed.audioSettings?.maxVolume}
-            };
+        const parsed = JSON.parse(savedData);
 
-            const volume = typeof parsed.volume === 'number' ? parsed.volume : 1;
-            const isMuted = typeof parsed.isMuted === 'boolean' ? parsed.isMuted : false;
+        const settings: Settings = {
+            ...defaultSettings,
+            ...parsed.settings,
+            midi: {
+                ...defaultSettings.midi,
+                ...parsed.settings?.midi,
+                mappings: {
+                    ...defaultSettings.midi.mappings,
+                    ...parsed.settings?.midi?.mappings,
+                },
+            },
+            osc: { ...defaultSettings.osc, ...parsed.settings?.osc },
+        };
 
-            return { settings: mergedSettings, audioSettings: mergedAudioSettings, volume, isMuted };
-        }
+        const audioSettings: AudioSettings = {
+            ...defaultAudioSettings,
+            ...parsed.audioSettings,
+            fadeIn: { ...defaultAudioSettings.fadeIn, ...parsed.audioSettings?.fadeIn },
+            fadeOut: { ...defaultAudioSettings.fadeOut, ...parsed.audioSettings?.fadeOut },
+            maxVolume: { ...defaultAudioSettings.maxVolume, ...parsed.audioSettings?.maxVolume },
+        };
+
+        const volume = typeof parsed.volume === 'number' ? parsed.volume : defaults.volume;
+        const isMuted = typeof parsed.isMuted === 'boolean' ? parsed.isMuted : defaults.isMuted;
+
+        return { settings, audioSettings, volume, isMuted };
     } catch (error) {
         console.error("Failed to load settings from localStorage", error);
+        return defaults;
     }
-    return { settings: defaultSettings, audioSettings: defaultAudioSettings, volume: 1, isMuted: false };
 };
 
 
@@ -144,7 +154,7 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
-  const [midiInputs, setMidiInputs] = useState<WebMidi.MIDIInput[]>([]);
+  const [midiInputs, setMidiInputs] = useState<MIDIInput[]>([]);
   const [lastMidiMessage, setLastMidiMessage] = useState<MidiMessage | null>(null);
   const [learningCommand, setLearningCommand] = useState<MidiCommand | null>(null);
   
@@ -244,6 +254,39 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
+  const _fadeOutAndExecute = useCallback((callback: () => void, forceFade: boolean = false) => {
+    stopFade();
+    if ((forceFade || (isPlaying && audioSettings.fadeOut.enabled)) && audioSettings.fadeOut.duration > 0 && audioRef.current) {
+        setIsFading(true);
+        const audio = audioRef.current;
+        const startVolume = isMuted ? 0 : volume;
+        let currentFadeTime = audioSettings.fadeOut.duration;
+        setFadeCountdown(currentFadeTime);
+
+        const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
+        const stepValue = startVolume / steps;
+
+        fadeIntervalRef.current = setInterval(() => {
+            if (!audio) { // Safety check
+                stopFade();
+                return;
+            }
+            const newVolume = Math.max(0, audio.volume - stepValue);
+            audio.volume = newVolume;
+            currentFadeTime -= 0.05;
+            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+
+            if (newVolume <= 0) {
+                stopFade();
+                callback();
+                audio.volume = startVolume; // Reset for next play
+            }
+        }, 50);
+    } else {
+        callback();
+    }
+  }, [isPlaying, audioSettings.fadeOut, isMuted, volume]);
+
   const stopPlayback = useCallback((fade = true) => {
     const stopAction = () => {
       if (audioRef.current) {
@@ -253,43 +296,13 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
       setIsPlaying(false);
     };
 
-    const fadeOutAnd = (callback: () => void) => {
-        stopFade();
-        if (audioSettings.fadeOut.enabled && audioSettings.fadeOut.duration > 0 && audioRef.current) {
-          setIsFading(true);
-          const audio = audioRef.current;
-          const startVolume = isMuted ? 0 : volume;
-          let currentFadeTime = audioSettings.fadeOut.duration;
-          setFadeCountdown(currentFadeTime);
-    
-          const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
-          const stepValue = startVolume / steps;
-    
-          fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.max(0, audio.volume - stepValue);
-            audio.volume = newVolume;
-            currentFadeTime -= 0.05;
-            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-    
-            if (newVolume <= 0) {
-              stopFade();
-              callback();
-              audio.volume = startVolume; // Reset for next play
-            }
-          }, 50);
-        } else {
-          callback();
-        }
-    };
-
-
     if (fade && isPlaying) {
-      fadeOutAnd(stopAction);
+      _fadeOutAndExecute(stopAction, true);
     } else {
       stopFade();
       stopAction();
     }
-  }, [isPlaying, audioSettings.fadeOut, isMuted, volume]);
+  }, [isPlaying, _fadeOutAndExecute]);
 
   const fadeIn = useCallback(() => {
     stopFade();
@@ -365,37 +378,8 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    const fadeOutAnd = (callback: () => void) => {
-        stopFade();
-        if (!fromError && audioSettings.fadeOut.enabled && audioSettings.fadeOut.duration > 0 && audioRef.current) {
-          setIsFading(true);
-          const audio = audioRef.current;
-          const startVolume = isMuted ? 0 : volume;
-          let currentFadeTime = audioSettings.fadeOut.duration;
-          setFadeCountdown(currentFadeTime);
-    
-          const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
-          const stepValue = startVolume / steps;
-    
-          fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.max(0, audio.volume - stepValue);
-            audio.volume = newVolume;
-            currentFadeTime -= 0.05;
-            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-    
-            if (newVolume <= 0) {
-              stopFade();
-              callback();
-              audio.volume = startVolume; // Reset for next play
-            }
-          }, 50);
-        } else {
-          callback();
-        }
-      };
-
-    fadeOutAnd(() => playTrack(nextIndex, true));
-  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, audioSettings.fadeOut, isMuted, volume]);
+    _fadeOutAndExecute(() => playTrack(nextIndex, true), !fromError);
+  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, _fadeOutAndExecute]);
 
 
   useEffect(() => {
@@ -521,35 +505,6 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
 
   const togglePlayPause = useCallback(() => {
     if (isFading) return;
-    
-    const fadeOutAnd = (callback: () => void) => {
-        stopFade();
-        if (audioSettings.fadeOut.enabled && audioSettings.fadeOut.duration > 0 && audioRef.current) {
-          setIsFading(true);
-          const audio = audioRef.current;
-          const startVolume = isMuted ? 0 : volume;
-          let currentFadeTime = audioSettings.fadeOut.duration;
-          setFadeCountdown(currentFadeTime);
-    
-          const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
-          const stepValue = startVolume / steps;
-    
-          fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.max(0, audio.volume - stepValue);
-            audio.volume = newVolume;
-            currentFadeTime -= 0.05;
-            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-    
-            if (newVolume <= 0) {
-              stopFade();
-              callback();
-              audio.volume = startVolume; // Reset for next play
-            }
-          }, 50);
-        } else {
-          callback();
-        }
-    };
 
     if (!currentTrack) {
         const indexToPlay = selectedIndex !== null ? selectedIndex : 0;
@@ -558,84 +513,58 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
         }
         return;
     };
+
     if (isPlaying) {
-      fadeOutAnd(() => {
-        audioRef.current?.pause();
-      });
-      setIsPlaying(false);
+        _fadeOutAndExecute(() => {
+            audioRef.current?.pause();
+            setIsPlaying(false);
+        }, true);
     } else {
-      if (audioRef.current) {
-          audioRef.current.play().then(() => {
-            fadeIn();
-          }).catch(e => {
-              console.error("Playback failed on toggle", e);
-              setIsPlaying(false);
-          });
-          setIsPlaying(true);
-      }
+        if (audioRef.current) {
+            audioRef.current.play().then(() => {
+                setIsPlaying(true);
+                fadeIn();
+            }).catch(e => {
+                console.error("Playback failed on toggle", e);
+                setIsPlaying(false);
+            });
+        }
     }
-  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeIn, isFading, audioSettings.fadeOut, isMuted, volume, selectedIndex]);
+  }, [isPlaying, currentTrack, currentQueue, playTrack, fadeIn, isFading, selectedIndex, _fadeOutAndExecute]);
 
   const playPrev = useCallback(() => {
     if (isFading) return;
-    
-    const fadeOutAnd = (callback: () => void) => {
-        stopFade();
-        if (audioSettings.fadeOut.enabled && audioSettings.fadeOut.duration > 0 && audioRef.current) {
-          setIsFading(true);
-          const audio = audioRef.current;
-          const startVolume = isMuted ? 0 : volume;
-          let currentFadeTime = audioSettings.fadeOut.duration;
-          setFadeCountdown(currentFadeTime);
-    
-          const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
-          const stepValue = startVolume / steps;
-    
-          fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.max(0, audio.volume - stepValue);
-            audio.volume = newVolume;
-            currentFadeTime -= 0.05;
-            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-    
-            if (newVolume <= 0) {
-              stopFade();
-              callback();
-              audio.volume = startVolume; // Reset for next play
-            }
-          }, 50);
-        } else {
-          callback();
-        }
-    };
 
     const logic = () => {
         if (currentTrackIndex === null || !audioRef.current) return;
         
         if (audioRef.current.currentTime > 3) {
-          audioRef.current.currentTime = 0;
-          if(!isPlaying) {
-            audioRef.current.play().then(fadeIn).catch(e => console.error(e));
-            setIsPlaying(true);
-          } else {
-            fadeIn();
-          }
+            audioRef.current.currentTime = 0;
+            if(!isPlaying) {
+                audioRef.current.play().then(() => {
+                    setIsPlaying(true);
+                    fadeIn();
+                }).catch(e => console.error(e));
+            } else {
+                fadeIn();
+            }
         } else {
-          let prevIndex = currentTrackIndex - 1;
-          if (prevIndex < 0) {
-            prevIndex = repeatMode === 'all' ? currentQueue.length - 1 : -1;
-          }
-          if (prevIndex >= 0) {
-            playTrack(prevIndex, true);
-          }
+            let prevIndex = currentTrackIndex - 1;
+            if (prevIndex < 0) {
+                prevIndex = repeatMode === 'all' ? currentQueue.length - 1 : -1;
+            }
+            if (prevIndex >= 0) {
+                playTrack(prevIndex, true);
+            }
         }
     }
 
     if (isPlaying) {
-      fadeOutAnd(logic);
+        _fadeOutAndExecute(logic);
     } else {
-      logic();
+        logic();
     }
-  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeIn, isFading, audioSettings.fadeOut, isMuted, volume]);
+  }, [currentTrackIndex, playTrack, repeatMode, currentQueue.length, isPlaying, fadeIn, isFading, _fadeOutAndExecute]);
 
   const clearQueue = () => {
     stopPlayback(false);
@@ -663,17 +592,17 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
       }
   }
 
-  const skipForward = () => {
+  const skipForward = useCallback(() => {
       if (audioRef.current && currentTrack && isFinite(audioRef.current.duration)) {
           audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, audioRef.current.duration);
       }
-  }
+  }, [currentTrack]);
 
-  const skipBackward = () => {
+  const skipBackward = useCallback(() => {
       if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.max(audioRef.current.currentTime - 10, 0);
       }
-  }
+  }, [currentTrack]);
 
   const reorderQueue = useCallback((startIndex: number, endIndex: number) => {
     if (isShuffled) {
@@ -715,16 +644,16 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
            setSelectedIndex(newQueue.length -1);
         }
     }
-  }, [queue, isShuffled, toast, currentTrack, selectedIndex]);
+  }, [queue, isShuffled, toast, currentTrack, selectedIndex, currentTrackIndex]);
   
-  const midiCommandActions = {
+  const midiCommandActions = useMemo(() => ({
     togglePlayPause,
     playNext,
     playPrev,
     stopPlayback: () => stopPlayback(),
     skipForward,
     skipBackward,
-  };
+  }), [togglePlayPause, playNext, playPrev, stopPlayback, skipForward, skipBackward]);
 
   const selectMidiInput = (id: string) => {
     setSettings(s => ({...s, midi: {...s.midi, inputId: id}}));
@@ -761,7 +690,8 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
     });
 
     if (selectedInput) {
-      const handleMidiMessage = (event: WebMidi.MIDIMessageEvent) => {
+      const handleMidiMessage = (event: MIDIMessageEvent) => {
+        if (!event.data) return;
         const [command, note, velocity] = event.data;
         
         let type: MidiMessage['type'] = 'Unknown';

@@ -350,7 +350,7 @@ export default function Queue() {
                                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center" style={{ height: 'calc(100vh - 250px)' }}>
                                     <ListMusic className="w-16 h-16 mb-4" />
                                     <h3 className="text-lg font-semibold">Your playlist is empty</h3>
-                                    <p className="text-sm">Click "Add" or drag & drop files to start.</p>
+                                    <p className="text-sm">Click &quot;Add&quot; or drag &amp; drop files to start.</p>
                                 </div>
                             )}
                         </ul>
