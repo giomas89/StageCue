@@ -365,37 +365,40 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    const fadeOutAnd = (callback: () => void) => {
-        stopFade();
-        if (!fromError && audioSettings.fadeOut.enabled && audioSettings.fadeOut.duration > 0 && audioRef.current) {
-          setIsFading(true);
-          const audio = audioRef.current;
-          const startVolume = isMuted ? 0 : volume;
-          let currentFadeTime = audioSettings.fadeOut.duration;
-          setFadeCountdown(currentFadeTime);
-    
-          const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
-          const stepValue = startVolume / steps;
-    
-          fadeIntervalRef.current = setInterval(() => {
-            const newVolume = Math.max(0, audio.volume - stepValue);
-            audio.volume = newVolume;
-            currentFadeTime -= 0.05;
-            setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
-    
-            if (newVolume <= 0) {
-              stopFade();
-              callback();
-              audio.volume = startVolume; // Reset for next play
-            }
-          }, 50);
-        } else {
-          callback();
-        }
-      };
-
-    fadeOutAnd(() => playTrack(nextIndex, true));
-  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, audioSettings.fadeOut, isMuted, volume]);
+    if (isPlaying && !fromError) {
+      const fadeOutAnd = (callback: () => void) => {
+          stopFade();
+          if (audioSettings.fadeOut.enabled && audioSettings.fadeOut.duration > 0 && audioRef.current) {
+            setIsFading(true);
+            const audio = audioRef.current;
+            const startVolume = isMuted ? 0 : volume;
+            let currentFadeTime = audioSettings.fadeOut.duration;
+            setFadeCountdown(currentFadeTime);
+      
+            const steps = audioSettings.fadeOut.duration * 20; // 50ms interval
+            const stepValue = startVolume / steps;
+      
+            fadeIntervalRef.current = setInterval(() => {
+              const newVolume = Math.max(0, audio.volume - stepValue);
+              audio.volume = newVolume;
+              currentFadeTime -= 0.05;
+              setFadeCountdown(currentFadeTime > 0 ? currentFadeTime : 0);
+      
+              if (newVolume <= 0) {
+                stopFade();
+                callback();
+                audio.volume = startVolume; // Reset for next play
+              }
+            }, 50);
+          } else {
+            callback();
+          }
+        };
+      fadeOutAnd(() => playTrack(nextIndex, true));
+    } else {
+      playTrack(nextIndex, true);
+    }
+  }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, audioSettings.fadeOut, isMuted, volume, isPlaying]);
 
 
   useEffect(() => {

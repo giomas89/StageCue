@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSoundCue } from '@/hooks/useSoundCue';
 import type { MidiCommand } from '@/types';
 import {
@@ -57,12 +57,25 @@ function MidiSettings() {
   
   const selectedInputId = settings.midi.inputId;
   const [lastMessages, setLastMessages] = useState<(typeof lastMidiMessage)[]>([]);
+  const [activeMidiTab, setActiveMidiTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('stagecue-midi-tab') || 'config';
+    }
+    return 'config';
+  });
 
   useEffect(() => {
     if (lastMidiMessage) {
         setLastMessages(prev => [lastMidiMessage, ...prev.slice(0, 49)]);
     }
   }, [lastMidiMessage]);
+  
+  const handleMidiTabChange = (value: string) => {
+    setActiveMidiTab(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('stagecue-midi-tab', value);
+    }
+  };
 
   const formatMidiNote = (note: number | null | undefined) => {
     if (note === null || note === undefined) return 'N/A';
@@ -82,7 +95,7 @@ function MidiSettings() {
   }
 
   return (
-    <Tabs defaultValue="config" className="w-full">
+    <Tabs value={activeMidiTab} onValueChange={handleMidiTabChange} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="config">Configuration</TabsTrigger>
             <TabsTrigger value="mapping">Mapping</TabsTrigger>
@@ -289,7 +302,7 @@ function OscSettings() {
     );
 }
 
-function GeneralSettings() {
+const GeneralSettings = React.memo(function GeneralSettings() {
     const { 
       settings, 
       setSettings, 
@@ -301,10 +314,26 @@ function GeneralSettings() {
       setVolume, 
       volume 
     } = useSoundCue();
+    
+    const [localFadeIn, setLocalFadeIn] = useState(audioSettings.fadeIn.duration);
+    const [localFadeOut, setLocalFadeOut] = useState(audioSettings.fadeOut.duration);
+    const [localMaxVol, setLocalMaxVol] = useState(audioSettings.maxVolume.level);
+    
+    useEffect(() => {
+        setLocalFadeIn(audioSettings.fadeIn.duration);
+    }, [audioSettings.fadeIn.duration]);
+    
+    useEffect(() => {
+        setLocalFadeOut(audioSettings.fadeOut.duration);
+    }, [audioSettings.fadeOut.duration]);
+    
+    useEffect(() => {
+        setLocalMaxVol(audioSettings.maxVolume.level);
+    }, [audioSettings.maxVolume.level]);
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleMaxVolEnabledChange = (checked: boolean) => {
+    const handleMaxVolEnabledChange = useCallback((checked: boolean) => {
         setAudioSettings(s => {
             const newSettings = {...s, maxVolume: {...s.maxVolume, enabled: checked }};
             if(checked){
@@ -312,15 +341,15 @@ function GeneralSettings() {
             }
             return newSettings;
         });
-    };
+    }, [setAudioSettings, setVolume]);
     
-    const handleMaxVolValueChange = (value: number[]) => {
+    const handleMaxVolValueChange = useCallback((value: number[]) => {
         const newLevel = value[0];
         setAudioSettings(s => ({...s, maxVolume: {...s.maxVolume, level: newLevel}}));
         setVolume(newLevel / 100);
-    };
+    }, [setAudioSettings, setVolume]);
 
-    const exportSettings = () => {
+    const exportSettings = useCallback(() => {
         const settingsJson = JSON.stringify({settings, audioSettings, volume}, null, 2);
         const blob = new Blob([settingsJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -330,9 +359,9 @@ function GeneralSettings() {
         a.click();
         URL.revokeObjectURL(url);
         toast({title: "Settings Exported"});
-    }
+    }, [settings, audioSettings, volume, toast]);
 
-    const importSettings = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const importSettings = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             const reader = new FileReader();
@@ -351,7 +380,7 @@ function GeneralSettings() {
             };
             reader.readAsText(file);
         }
-    }
+    }, [setSettings, setAudioSettings, setVolume, toast]);
 
     return (
         <div className="space-y-6">
@@ -394,10 +423,15 @@ function GeneralSettings() {
                                 type="number"
                                 min="0.1"
                                 step="0.1"
-                                value={audioSettings.fadeIn.duration}
-                                onChange={(e) => setAudioSettings(s => ({...s, fadeIn: {...s.fadeIn, duration: Math.max(0.1, Number(e.target.value)) }}))}
+                                value={localFadeIn}
+                                onChange={(e) => {
+                                    const val = Math.max(0.1, Number(e.target.value));
+                                    setLocalFadeIn(val);
+                                    setAudioSettings(s => ({...s, fadeIn: {...s.fadeIn, duration: val }}));
+                                }}
                                 disabled={!audioSettings.fadeIn.enabled}
-                                className="pl-8 text-center"
+                                className="pl-8 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                style={{MozAppearance: 'textfield'}}
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">s</span>
                         </div>
@@ -419,10 +453,15 @@ function GeneralSettings() {
                                 type="number"
                                 min="0.1"
                                 step="0.1"
-                                value={audioSettings.fadeOut.duration}
-                                onChange={(e) => setAudioSettings(s => ({...s, fadeOut: {...s.fadeOut, duration: Math.max(0.1, Number(e.target.value)) }}))}
+                                value={localFadeOut}
+                                onChange={(e) => {
+                                    const val = Math.max(0.1, Number(e.target.value));
+                                    setLocalFadeOut(val);
+                                    setAudioSettings(s => ({...s, fadeOut: {...s.fadeOut, duration: val }}));
+                                }}
                                 disabled={!audioSettings.fadeOut.enabled}
-                                className="pl-8 text-center"
+                                className="pl-8 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                style={{MozAppearance: 'textfield'}}
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">s</span>
                         </div>
@@ -452,10 +491,15 @@ function GeneralSettings() {
                                 min="0"
                                 max="100"
                                 step="1"
-                                value={audioSettings.maxVolume.level}
-                                onChange={(e) => handleMaxVolValueChange([Math.max(0, Math.min(100, Number(e.target.value)))])}
+                                value={localMaxVol}
+                                onChange={(e) => {
+                                    const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                                    setLocalMaxVol(val);
+                                    handleMaxVolValueChange([val]);
+                                }}
                                 disabled={!audioSettings.maxVolume.enabled}
-                                className="pl-8 text-center"
+                                className="pl-8 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                style={{MozAppearance: 'textfield'}}
                             />
                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                         </div>
@@ -467,6 +511,7 @@ function GeneralSettings() {
                             max={100}
                             step={1}
                             disabled={!audioSettings.maxVolume.enabled}
+                            onPointerDown={(e) => e.stopPropagation()}
                         />
                     </div>
                 </div>
@@ -489,11 +534,25 @@ function GeneralSettings() {
             </div>
         </div>
     )
-}
+});
 
 export default function SettingsPanel() {
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('stagecue-active-tab') || 'general';
+    }
+    return 'general';
+  });
+  
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('stagecue-active-tab', value);
+    }
+  };
+  
   return (
-    <Tabs defaultValue="general" className="w-full">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
       <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="midi">MIDI</TabsTrigger>

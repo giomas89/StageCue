@@ -6,8 +6,7 @@ import {
   Music,
   Menu,
   X,
-  Cpu,
-  MemoryStick
+  Cpu
 } from 'lucide-react';
 import { useSoundCue } from '@/hooks/useSoundCue';
 import { useSystemMonitor } from '@/hooks/useSystemMonitor';
@@ -32,7 +31,7 @@ const StageCueLogo = () => (
 );
 
 const SystemStats = () => {
-  const { cpu, memory } = useSystemMonitor();
+  const { cpu } = useSystemMonitor();
   
   return (
     <div className="flex items-center gap-3 text-sm">
@@ -41,13 +40,6 @@ const SystemStats = () => {
         <span className="text-muted-foreground">CPU:</span>
         <Badge variant={cpu > 80 ? "destructive" : cpu > 60 ? "secondary" : "outline"} className="text-xs">
           {cpu}%
-        </Badge>
-      </div>
-      <div className="flex items-center gap-1">
-        <MemoryStick className="h-4 w-4 text-muted-foreground" />
-        <span className="text-muted-foreground">RAM:</span>
-        <Badge variant={memory > 80 ? "destructive" : memory > 60 ? "secondary" : "outline"} className="text-xs">
-          {memory}%
         </Badge>
       </div>
     </div>
@@ -139,7 +131,7 @@ export default function StageCueClient() {
         <StageCueLogo />
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="text-xs font-mono">
-            v0.1.9
+            v0.6.1
           </Badge>
           <SystemStats />
           {isMobile && (

@@ -1,6 +1,6 @@
 {
   "name": "stagecue",
-  "version": "0.1.9",
+  "version": "0.6.2",
   "description": "A modern audio player for creators and live performers",
   "author": "StageCue Team",
   "private": true,
@@ -93,7 +93,8 @@
         "target": "portable",
         "arch": ["x64"]
       },
-      "artifactName": "${productName}-${version}-portable.${ext}"
+      "artifactName": "${productName}-${version}-portable.${ext}",
+      "compression": "store"
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"
