@@ -139,7 +139,7 @@ export default function StageCueClient() {
         <StageCueLogo />
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="text-xs font-mono">
-            v0.1.9
+            v0.3.2
           </Badge>
           <SystemStats />
           {isMobile && (

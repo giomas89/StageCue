@@ -431,6 +431,25 @@ function GeneralSettings() {
             </div>
 
             <div className="space-y-3">
+                 <Label className="text-base font-semibold">Audio Processing</Label>
+                 <p className="text-sm text-muted-foreground">Advanced audio processing options.</p>
+                 <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
+                    <Switch
+                        id="vocal-removal"
+                        checked={false}
+                        disabled={true}
+                        aria-label="Toggle Vocal Removal"
+                    />
+                    <div className="flex flex-col">
+                        <Label htmlFor="vocal-removal" className="text-sm">
+                            Vocal Removal (Karaoke Mode) - In sviluppo
+                        </Label>
+                        <p className="text-xs text-muted-foreground">Funzionalità temporaneamente disabilitata</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-3">
                  <Label className="text-base font-semibold">Volume Control</Label>
                  <p className="text-sm text-muted-foreground">Set a maximum volume limit for the player.</p>
                  <div className="space-y-4">

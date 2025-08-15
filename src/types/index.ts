@@ -50,6 +50,10 @@ export interface AudioSettings {
     enabled: boolean;
     level: number;
   },
+  vocalRemoval: {
+    enabled: boolean;
+    highPassFreq: number;
+  },
 }
 
     

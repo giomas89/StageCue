@@ -16,8 +16,8 @@ function createWindow() {
     height: 800,
     title: 'StageCue',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
   });
@@ -35,6 +35,16 @@ function createWindow() {
 }
 
 app.on('ready', createWindow);
+
+ipcMain.handle('get-process-stats', () => {
+  const cpuUsage = process.getCPUUsage();
+  const memoryUsage = process.getProcessMemoryInfo();
+  
+  return {
+    cpu: cpuUsage.percentCPUUsage,
+    memory: (memoryUsage.residentSet / 1024 / 1024)
+  };
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

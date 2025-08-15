@@ -81,6 +81,7 @@ const defaultAudioSettings: AudioSettings = {
     fadeIn: { enabled: false, duration: 2 },
     fadeOut: { enabled: false, duration: 2 },
     maxVolume: { enabled: false, level: 100 },
+    vocalRemoval: { enabled: false, highPassFreq: 200 },
 };
 
 const loadInitialState = () => {
@@ -398,9 +399,12 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
   }, [currentTrackIndex, currentQueue, repeatMode, stopPlayback, playTrack, audioSettings.fadeOut, isMuted, volume]);
 
 
+
+  
   useEffect(() => {
     if (!audioRef.current) {
         audioRef.current = new Audio();
+        // audioRef.current.crossOrigin = 'anonymous';
     }
     const audio = audioRef.current;
     
@@ -468,6 +472,8 @@ export function StageCueProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('error', handleError);
     };
   }, [toast, getAudioOutputs, playNext, repeatMode, currentTrack?.name, fadeIn, currentTrack]);
+  
+
   
   useEffect(() => {
       if (queue.length > 0 && currentTrackIndex === null) {
